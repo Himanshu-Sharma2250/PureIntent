@@ -4,7 +4,8 @@
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/instrument-serif": "^0.4.1",
-    "expo": "~57.0.10",
+    "eas-cli": "^0.0.0",
+    "expo": "^46.0.21",
     "expo-font": "~57.0.1",
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",

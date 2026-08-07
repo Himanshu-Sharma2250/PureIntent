@@ -1,25 +1,25 @@
 {
   "expo": {
-    "name": "TODO",
-    "slug": "TODO",
+    "name": "PureIntent",
+    "slug": "PureIntent",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/PureIntent_font.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.himanshu.PureIntent",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/PureIntent 512 dim.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/PureIntent 48 x 48.png"
     },
     "plugins": [
       "expo-sqlite",
