@@ -10,9 +10,10 @@ import {
   ActivityIndicator,
   Easing,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Sun, Moon, Plus, Search, RefreshCw } from 'lucide-react-native';
+import { Sun, Moon, Plus, Search, RefreshCw, Bell, BellOff } from 'lucide-react-native';
 import { useTheme } from '../components/ThemeContext';
 import { useIntents } from '../hooks/useIntents';
 import { TaskCard } from '../components/TaskCard';
@@ -33,6 +34,9 @@ export const HomeScreen: React.FC = () => {
     updateIntent,
     toggleComplete,
     deleteIntent,
+    notificationsEnabled,
+    toggleGlobalNotifications,
+    requestPermissions,
   } = useIntents();
 
   // Search & Filter State
@@ -141,6 +145,20 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleNotificationToggle = async () => {
+    if (!notificationsEnabled) {
+      const granted = await requestPermissions();
+      if (!granted) {
+        Alert.alert(
+          'Notification Permission Required',
+          'Notification permission is currently disabled on your device. Reminders will be stored locally and fire once permission is enabled in Settings.',
+          [{ text: 'Understand' }]
+        );
+      }
+    }
+    await toggleGlobalNotifications();
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
@@ -154,46 +172,70 @@ export const HomeScreen: React.FC = () => {
             </Text>
           </View>
 
-          {/* Theme Switcher Button with custom physics */}
-          <Pressable
-            onPress={toggleTheme}
-            style={({ pressed }) => [
-              styles.themeToggle,
-              {
-                borderColor: colors.borderColor,
-                backgroundColor: colors.mutedBg,
-                transform: [{ scale: pressed ? 0.9 : 1 }],
-              },
-            ]}
-          >
-            {/* Sun Icon (Slide out top & fade) */}
-            <Animated.View
-              style={[
-                StyleSheet.absoluteFill,
-                styles.iconWrapper,
+          {/* Action controls (Notifications & Theme) */}
+          <View style={styles.headerActions}>
+            {/* Global Notification Bell Toggle */}
+            <Pressable
+              onPress={handleNotificationToggle}
+              accessibilityLabel="Toggle notifications"
+              style={({ pressed }) => [
+                styles.themeToggle,
                 {
-                  transform: [{ translateY: sunTranslateY }, { rotate: sunRotate }],
-                  opacity: sunOpacity,
+                  borderColor: colors.borderColor,
+                  backgroundColor: colors.mutedBg,
+                  transform: [{ scale: pressed ? 0.9 : 1 }],
                 },
               ]}
             >
-              <Sun size={18} color={colors.foreground} strokeWidth={2.5} />
-            </Animated.View>
+              {notificationsEnabled ? (
+                <Bell size={18} color={colors.primary} strokeWidth={2.5} />
+              ) : (
+                <BellOff size={18} color={colors.mutedFg} strokeWidth={2} />
+              )}
+            </Pressable>
 
-            {/* Moon Icon (Slide in from bottom & fade) */}
-            <Animated.View
-              style={[
-                StyleSheet.absoluteFill,
-                styles.iconWrapper,
+            {/* Theme Switcher Button with custom physics */}
+            <Pressable
+              onPress={toggleTheme}
+              accessibilityLabel="Toggle theme"
+              style={({ pressed }) => [
+                styles.themeToggle,
                 {
-                  transform: [{ translateY: moonTranslateY }],
-                  opacity: moonOpacity,
+                  borderColor: colors.borderColor,
+                  backgroundColor: colors.mutedBg,
+                  transform: [{ scale: pressed ? 0.9 : 1 }],
                 },
               ]}
             >
-              <Moon size={18} color={colors.foreground} strokeWidth={2.5} />
-            </Animated.View>
-          </Pressable>
+              {/* Sun Icon (Slide out top & fade) */}
+              <Animated.View
+                style={[
+                  StyleSheet.absoluteFill,
+                  styles.iconWrapper,
+                  {
+                    transform: [{ translateY: sunTranslateY }, { rotate: sunRotate }],
+                    opacity: sunOpacity,
+                  },
+                ]}
+              >
+                <Sun size={18} color={colors.foreground} strokeWidth={2.5} />
+              </Animated.View>
+
+              {/* Moon Icon (Slide in from bottom & fade) */}
+              <Animated.View
+                style={[
+                  StyleSheet.absoluteFill,
+                  styles.iconWrapper,
+                  {
+                    transform: [{ translateY: moonTranslateY }],
+                    opacity: moonOpacity,
+                  },
+                ]}
+              >
+                <Moon size={18} color={colors.foreground} strokeWidth={2.5} />
+              </Animated.View>
+            </Pressable>
+          </View>
         </View>
 
         {/* Minimal Search and Filter bar */}
@@ -374,6 +416,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     marginBottom: 10,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   headerTitle: {
     fontFamily: 'InstrumentSerif-Regular',

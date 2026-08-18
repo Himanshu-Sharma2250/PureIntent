@@ -406,6 +406,12 @@ export const IntentModal: React.FC<IntentModalProps> = ({
                 </Text>
               </Pressable>
 
+              {dueDate ? (
+                <Text style={[styles.notificationHint, { color: colors.mutedFg }]}>
+                  An offline local reminder will fire at 09:00 AM on this date.
+                </Text>
+              ) : null}
+
               {/* Quick Chips row */}
               <View style={styles.chipsRow}>
                 {[
@@ -567,6 +573,12 @@ const styles = StyleSheet.create({
   },
   dateTriggerText: {
     fontSize: 15,
+  },
+  notificationHint: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginBottom: 10,
+    paddingLeft: 4,
   },
   chipsRow: {
     flexDirection: 'row',

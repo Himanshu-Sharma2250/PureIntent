@@ -6,6 +6,7 @@ export interface Intent {
   description: string | null;
   is_completed: boolean;
   due_date: string | null;
+  notification_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -16,6 +17,7 @@ interface DbIntent {
   description: string | null;
   is_completed: number; // 0 or 1 in SQLite
   due_date: string | null;
+  notification_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +32,7 @@ function mapDbRow(row: DbIntent): Intent {
     description: row.description,
     is_completed: row.is_completed === 1,
     due_date: row.due_date,
+    notification_id: row.notification_id ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -79,14 +82,15 @@ export const taskRepository = {
     db: SQLiteDatabase,
     title: string,
     description?: string | null,
-    dueDate?: string | null
+    dueDate?: string | null,
+    notificationId?: string | null
   ): Promise<number> {
     try {
       const timestamp = new Date().toISOString();
       const result = await db.runAsync(
-        `INSERT INTO intents (title, description, is_completed, due_date, created_at, updated_at)
-         VALUES (?, ?, 0, ?, ?, ?);`,
-        [title, description || null, dueDate || null, timestamp, timestamp]
+        `INSERT INTO intents (title, description, is_completed, due_date, notification_id, created_at, updated_at)
+         VALUES (?, ?, 0, ?, ?, ?, ?);`,
+        [title, description || null, dueDate || null, notificationId || null, timestamp, timestamp]
       );
       return result.lastInsertRowId;
     } catch (error) {
@@ -96,30 +100,55 @@ export const taskRepository = {
   },
 
   /**
-   * Updates an existing intent's title, description, and status.
+   * Updates an existing intent's title, description, due date, and notification ID.
    */
   async updateIntent(
     db: SQLiteDatabase,
     id: number,
-    fields: { title: string; description?: string | null; dueDate?: string | null }
+    fields: {
+      title: string;
+      description?: string | null;
+      dueDate?: string | null;
+      notificationId?: string | null;
+    }
   ): Promise<void> {
-
     try {
       const timestamp = new Date().toISOString();
       await db.runAsync(
         `UPDATE intents
-         SET title = ?, description = ?, due_date = ?, updated_at = ?
+         SET title = ?, description = ?, due_date = ?, notification_id = ?, updated_at = ?
          WHERE id = ?;`,
         [
           fields.title,
           fields.description || null,
           fields.dueDate || null,
+          fields.notificationId !== undefined ? fields.notificationId : null,
           timestamp,
           id,
         ]
       );
     } catch (error) {
       console.error(`[Repository] Error updating intent ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Updates only the notification_id for a given task ID.
+   */
+  async updateNotificationId(
+    db: SQLiteDatabase,
+    id: number,
+    notificationId: string | null
+  ): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+      await db.runAsync(
+        'UPDATE intents SET notification_id = ?, updated_at = ? WHERE id = ?;',
+        [notificationId, timestamp, id]
+      );
+    } catch (error) {
+      console.error(`[Repository] Error updating notification ID for intent ${id}:`, error);
       throw error;
     }
   },

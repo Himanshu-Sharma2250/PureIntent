@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, Pressable, Animated } from 'react-native';
-import { CheckCircle2, Clock, AlertCircle, Calendar } from 'lucide-react-native';
+import { CheckCircle2, Clock, AlertCircle, Calendar, Bell } from 'lucide-react-native';
 import { useTheme } from './ThemeContext';
 import { Intent } from '../db/taskRepository';
 
@@ -14,12 +14,13 @@ interface TaskCardProps {
 
 /**
  * Renders an Intent card with layout transitions and typography.
- * Supports tap to toggle complete, tap to edit/view, and long press for action sheets.
+ * Supports tap to toggle complete, tap to edit/view, long press for action sheets,
+ * and offline notification indicator.
  */
 export const TaskCard: React.FC<TaskCardProps> = React.memo(
   ({ intent, index, onToggleComplete, onPress, onLongPress }) => {
     const { colors } = useTheme();
-    
+
     // Animation for staggered fade-in + slide-up on mount
     const animValue = useRef(new Animated.Value(0)).current;
 
@@ -27,7 +28,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
       Animated.timing(animValue, {
         toValue: 1,
         duration: 400,
-        delay: Math.min(index * 75, 450), // stagger limit to avoid sluggish loading on long lists
+        delay: Math.min(index * 75, 450),
         useNativeDriver: true,
       }).start();
     }, [index, animValue]);
@@ -50,12 +51,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
       intent.due_date &&
       new Date(intent.due_date).getTime() < new Date().setHours(0, 0, 0, 0);
 
+    const hasActiveNotification = !intent.is_completed && !!intent.notification_id;
+
     const renderStatusIcon = () => {
       if (intent.is_completed) {
         return <CheckCircle2 size={18} strokeWidth={2.5} color={colors.success} />;
       }
       if (isOverdue) {
-        return <AlertCircle size={18} strokeWidth={2.5} color="#dc2626" />; // red-600 warning
+        return <AlertCircle size={18} strokeWidth={2.5} color="#dc2626" />;
       }
       return <Clock size={18} strokeWidth={2.5} color={colors.primary} />;
     };
@@ -78,7 +81,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
         <Pressable
           onPress={onPress}
           onLongPress={onLongPress}
-          delayLongPress={450} // standard comfortable long-press duration
+          delayLongPress={450}
           style={({ pressed }) => [
             styles.card,
             {
@@ -139,6 +142,13 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
           {/* Footer Metadata */}
           {intent.due_date || intent.created_at ? (
             <View style={[styles.cardFooter, { borderTopColor: colors.borderColor }]}>
+              {hasActiveNotification ? (
+                <View style={styles.notificationBadge}>
+                  <Bell size={11} color={colors.primary} />
+                  <Text style={[styles.badgeText, { color: colors.primary }]}>Reminder Set</Text>
+                </View>
+              ) : null}
+
               {intent.due_date ? (
                 <View style={styles.metaItem}>
                   <Calendar size={12} color={isOverdue ? '#dc2626' : colors.mutedFg} />
@@ -211,15 +221,27 @@ const styles = StyleSheet.create({
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     marginTop: 12,
     paddingTop: 8,
     borderTopWidth: 1,
+  },
+  notificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  badgeText: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: '600',
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginLeft: 'auto',
   },
   metaText: {
     fontSize: 11,
