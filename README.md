@@ -1,44 +1,55 @@
-# PureIntent
+# PureIntent (v2.0.0)
 
 **Begin your journey into focus.**
 
-PureIntent is an editorial-grade, minimalist offline Todo application built with Expo and React Native. It is designed to provide a serene and focused experience for managing your personal intentions and tasks.
+PureIntent is an editorial-grade, minimalist offline Todo application built with Expo and React Native. It is designed to provide a serene and focused experience for managing your personal intentions and tasks with 100% privacy and zero external network dependencies.
 
-## Features
+## What's New in v2.0.0 🔔
 
-- **Offline-First:** Fully functional without an internet connection, powered by `expo-sqlite`.
-- **Editorial Design:** A highly intentional, premium minimalist UI featuring the *Instrument Serif* font and carefully crafted micro-interactions.
-- **Dynamic Theming:** Seamless Light and Dark mode support with physics-based sun and moon transition animations.
-- **Task Management:** Create, edit, complete, and delete your intentions with intuitive modals.
-- **Search & Filtering:** Quickly find and organize your tasks using search and status filters (All, Pending, Completed).
-- **Smooth Animations:** Fluid UI movements, including animated loading spinners and scaling interactions on button presses.
+- **Offline Local Notifications:** Schedule on-device reminders for tasks with due dates using `expo-notifications`. Works 100% offline with zero push servers or tracking.
+- **Global & Contextual Notification Controls:** Quickly toggle all notifications globally using the header bell control (`Bell` / `BellOff`), or allow automatic reminder scheduling when setting due dates.
+- **Auto-Reconciliation Engine:** On application launch, scheduled OS notifications are reconciled against your SQLite database to eliminate drift, stale reminders, or orphan alerts.
+- **Visual Status Badges:** Tasks with active reminders display a minimalist indicator badge matching the app's Instrument Serif aesthetic.
+
+## Core Features
+
+- **100% Offline-First Architecture:** Powered by `expo-sqlite` and local device notification triggers — no internet connection required.
+- **Editorial Design System:** A highly intentional, premium minimalist UI featuring the *Instrument Serif* font and carefully crafted micro-interactions.
+- **Dynamic Physics-Based Theming:** Seamless Light and Dark mode support with smooth sun and moon transition physics.
+- **Task & Intention Management:** Create, edit, complete, reschedule, and delete intentions with fluid modal sheets.
+- **Search & Filter:** Instantly filter intentions by status (*All*, *Pending*, *Completed*) or search query.
 
 ## Tech Stack
 
-This project was built using modern tools and libraries:
+This project is built using modern offline React Native and Expo infrastructure:
 
 - **React Native** (v0.86.2) & **Expo** (SDK 57)
-- **TypeScript** for robust typing
-- **expo-sqlite** for local offline data storage
+- **TypeScript** for strict type safety
+- **expo-sqlite** for local SQLite database storage & schema migrations
+- **expo-notifications** for local scheduled notifications
 - **lucide-react-native** for minimalist iconography
-- **expo-font** using `@expo-google-fonts/instrument-serif`
-- **react-native-safe-area-context** for handling modern device notches and edges
+- **expo-font** with `@expo-google-fonts/instrument-serif`
+- **react-native-safe-area-context** for edge-to-edge layout safety
 
 ## Getting Started
 
 ### Prerequisites
 
-Ensure you have [Node.js](https://nodejs.org/) installed along with an Expo-compatible environment (iOS Simulator, Android Emulator, or Expo Go on a physical device).
+Ensure you have [Node.js](https://nodejs.org/) installed along with an Expo-compatible environment (iOS Simulator, Android Emulator, or a physical device with a dev client build).
 
 ### Installation
 
-1. Clone or download this repository.
+1. Clone or download this repository:
+   ```bash
+   git clone https://github.com/Himanshu-Sharma2250/PureIntent.git
+   cd PureIntent
+   ```
 2. Install dependencies:
    ```bash
    npm install
    ```
 
-### Running the App
+### Running the App Locally
 
 Start the development server:
 ```bash
@@ -47,19 +58,30 @@ npm start
 From the Expo CLI, you can press:
 - `a` to open on an Android emulator.
 - `i` to open on an iOS simulator.
-- `w` to run it in a web browser (if web is configured).
+- `w` to run it in a web browser.
+
+### Building an Standalone Android APK (v2.0.0)
+
+To build a standalone Android APK using EAS:
+```bash
+npx eas-cli build -p android --profile preview
+```
 
 ## Project Structure
 
 ```
-├── components/          # Reusable UI components (TaskCard, ActionModal, etc.)
-├── db/                  # SQLite database configuration and Task Repository
-├── hooks/               # Custom React hooks (useIntents)
-├── screens/             # Application screens (HomeScreen)
-└── package.json         # Project metadata and dependencies
+├── assets/              # App branding assets & icons
+├── components/          # Reusable UI components (TaskCard, IntentModal, ActionModal, ThemeContext)
+├── db/                  # SQLite schema setup, migrations, and Task Repository layer
+├── hooks/               # Custom hooks (useIntents for state & notification lifecycle)
+├── services/            # Offline notification service (notificationService.ts)
+├── screens/             # Primary application screens (HomeScreen)
+├── CHANGELOG.md         # Full version history and feature changelog
+├── app.json             # Expo project configuration (v2.0.0)
+└── package.json         # Dependencies and scripts
 ```
 
 ## Philosophy
 
 *Silence.* The mind is free of scheduled intentions.
-PureIntent embraces simplicity. It avoids overwhelming features in favor of a quiet, beautiful interface that helps you focus on what truly matters.
+PureIntent embraces simplicity. It avoids overwhelming clutter in favor of a quiet, beautiful interface that helps you focus on what truly matters.
