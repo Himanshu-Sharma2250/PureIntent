@@ -1,15 +1,15 @@
-# PureIntent (v2.0.0)
+# PureIntent (v3.0.0)
 
 **Begin your journey into focus.**
 
 PureIntent is an editorial-grade, minimalist offline Todo application built with Expo and React Native. It is designed to provide a serene and focused experience for managing your personal intentions and tasks with 100% privacy and zero external network dependencies.
 
-## What's New in v2.0.0 🔔
+## What's New in v3.0.0 📝
 
-- **Offline Local Notifications:** Schedule on-device reminders for tasks with due dates using `expo-notifications`. Works 100% offline with zero push servers or tracking.
-- **Global & Contextual Notification Controls:** Quickly toggle all notifications globally using the header bell control (`Bell` / `BellOff`), or allow automatic reminder scheduling when setting due dates.
-- **Auto-Reconciliation Engine:** On application launch, scheduled OS notifications are reconciled against your SQLite database to eliminate drift, stale reminders, or orphan alerts.
-- **Visual Status Badges:** Tasks with active reminders display a minimalist indicator badge matching the app's Instrument Serif aesthetic.
+- **Full-Screen Task Detail Screen:** Replaced direct modal editing on card tap with a dedicated full-screen task inspection view showing task title, status toggle, description, exact due datetime, creation timestamp, and actions.
+- **Nested Task Notes:** Tasks now support local nested notes for breaking intents down into steps, thoughts, and sub-items, stored locally in SQLite with cascade deletion (notes are deleted automatically if their parent task is deleted).
+- **React Navigation Integration:** Configured typed native stack navigation (`@react-navigation/native` & `@react-navigation/native-stack`) for smooth slide transitions.
+- **Per-Task Exact-Time Notification Control (v2.1.0):** Each task now supports its own independent notification time scheduled locally via `expo-notifications` using exact-datetime triggers, controlled by a minimalist editorial time picker with quick presets and past-time validation.
 
 ## Core Features
 
@@ -24,6 +24,7 @@ PureIntent is an editorial-grade, minimalist offline Todo application built with
 This project is built using modern offline React Native and Expo infrastructure:
 
 - **React Native** (v0.86.2) & **Expo** (SDK 57)
+- **React Navigation** (v7) stack navigator with native screens integration
 - **TypeScript** for strict type safety
 - **expo-sqlite** for local SQLite database storage & schema migrations
 - **expo-notifications** for local scheduled notifications
@@ -60,7 +61,7 @@ From the Expo CLI, you can press:
 - `i` to open on an iOS simulator.
 - `w` to run it in a web browser.
 
-### Building an Standalone Android APK (v2.0.0)
+### Building a Standalone Android APK
 
 To build a standalone Android APK using EAS:
 ```bash
@@ -71,14 +72,14 @@ npx eas-cli build -p android --profile preview
 
 ```
 ├── assets/              # App branding assets & icons
-├── components/          # Reusable UI components (TaskCard, IntentModal, ActionModal, ThemeContext)
-├── db/                  # SQLite schema setup, migrations, and Task Repository layer
-├── hooks/               # Custom hooks (useIntents for state & notification lifecycle)
+├── components/          # Reusable UI components (TaskCard, NoteCard, NoteModal, IntentModal, ThemeContext)
+├── db/                  # SQLite schema, migrations, Task & Note repositories (db.ts, taskRepository.ts, noteRepository.ts)
+├── hooks/               # Custom hooks (useIntents for tasks/notifications, useNotes for notes state)
 ├── services/            # Offline notification service (notificationService.ts)
-├── screens/             # Primary application screens (HomeScreen)
+├── screens/             # Primary application screens (HomeScreen, TaskDetailScreen)
 ├── CHANGELOG.md         # Full version history and feature changelog
-├── app.json             # Expo project configuration (v2.0.0)
-└── package.json         # Dependencies and scripts
+├── app.json             # Expo project configuration (v3.0.0)
+└── package.json         # Dependencies and scripts (v3.0.0)
 ```
 
 ## Philosophy

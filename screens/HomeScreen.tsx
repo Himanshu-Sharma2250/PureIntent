@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Sun, Moon, Plus, Search, RefreshCw, Bell, BellOff } from 'lucide-react-native';
 import { useTheme } from '../components/ThemeContext';
 import { useIntents } from '../hooks/useIntents';
@@ -38,6 +39,15 @@ export const HomeScreen: React.FC = () => {
     toggleGlobalNotifications,
     requestPermissions,
   } = useIntents();
+
+  const navigation = useNavigation<any>();
+
+  // Refresh intents list whenever HomeScreen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -332,7 +342,7 @@ export const HomeScreen: React.FC = () => {
                 intent={item}
                 index={index}
                 onToggleComplete={() => handleToggleComplete(item)}
-                onPress={() => handleEditIntentTrigger(item)}
+                onPress={() => navigation.navigate('TaskDetail', { taskId: item.id })}
                 onLongPress={() => handleLongPressCard(item)}
               />
             )}

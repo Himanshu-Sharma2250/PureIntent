@@ -5,6 +5,24 @@ All notable changes to PureIntent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-08-22
+
+### Added
+- **Full-Screen Task Detail Screen (`screens/TaskDetailScreen.tsx`)**: Replaced direct modal editing on card tap with navigation to a dedicated full-screen task detail view displaying intent title, description, exact datetime, creation timestamp, and actions.
+- **Notes Feature (100% Offline)**: Tasks now support nested notes for breaking intents down into steps, thoughts, and sub-items, stored locally in SQLite with zero network dependencies.
+- **Notes SQLite Schema & Cascade Deletion (`db/db.ts`)**: Added `notes` table with `FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE` and `PRAGMA foreign_keys = ON;` to ensure notes automatically delete with their parent task without leaving orphaned rows.
+- **Dedicated Note Repository (`db/noteRepository.ts`)**: Encapsulated CRUD methods (`createNote`, `getNotesByTaskId`, `updateNote`, `deleteNote`) interacting with SQLite database.
+- **Reactive Notes Hook (`hooks/useNotes.ts`)**: Reactive state hook for note CRUD operations with optimistic state updates and error handling.
+- **Editorial Note Components (`components/NoteCard.tsx`, `components/NoteModal.tsx`)**: Minimalist note cards with timestamp and action buttons, and slide-up modal with single multiline text input and empty-submission validation.
+- **React Navigation Stack Architecture**: Configured React Navigation Native Stack (`@react-navigation/native` & `@react-navigation/native-stack`) with typed routes (`Home`, `TaskDetail`) and custom transitions.
+
+### Changed
+- Tapping a task card on the Home screen now smoothly navigates to `TaskDetailScreen`.
+- Long-pressing a task card remains available for the bottom-sheet quick action menu.
+- Reused existing `IntentModal` component within `TaskDetailScreen` for editing tasks directly from the detail view.
+
+---
+
 ## [2.1.0] - 2026-08-22
 
 ### Added

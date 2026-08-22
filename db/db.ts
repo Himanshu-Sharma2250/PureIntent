@@ -8,6 +8,7 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
   try {
     await db.execAsync(`
       PRAGMA journal_mode = WAL;
+      PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS intents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
@@ -17,6 +18,15 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
         notification_id TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS settings (

@@ -2,7 +2,7 @@
   "expo": {
     "name": "PureIntent",
     "slug": "PureIntent",
-    "version": "2.1.0",
+    "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/PureIntent_font.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     },
     "android": {
       "package": "com.himanshu.PureIntent",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/PureIntent 512 dim.png"

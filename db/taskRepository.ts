@@ -179,6 +179,7 @@ export const taskRepository = {
    */
   async deleteIntent(db: SQLiteDatabase, id: number): Promise<void> {
     try {
+      await db.runAsync('PRAGMA foreign_keys = ON;');
       await db.runAsync('DELETE FROM intents WHERE id = ?;', [id]);
     } catch (error) {
       console.error(`[Repository] Error deleting intent ${id}:`, error);
