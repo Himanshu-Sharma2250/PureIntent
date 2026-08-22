@@ -109,39 +109,29 @@ export const notificationService = {
   },
 
   /**
-   * Computes trigger Date from a task's due_date string (e.g. "YYYY-MM-DD" or ISO).
-   * Defaults to 9:00 AM on the specified due date.
+   * Computes trigger Date from a task's due_date ISO string (e.g. "2026-08-22T17:00:00.000Z").
+   * Returns a valid Date if the trigger time is in the future, or null if past/invalid.
    */
   calculateTriggerDate(dueDateStr: string): Date | null {
     try {
       if (!dueDateStr) return null;
-      let year: number, month: number, day: number;
+      let target: Date;
 
       if (dueDateStr.includes('T')) {
-        const d = new Date(dueDateStr);
-        if (isNaN(d.getTime())) return null;
-        return d;
+        target = new Date(dueDateStr);
+      } else {
+        const parts = dueDateStr.split('-');
+        if (parts.length !== 3) return null;
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        target = new Date(year, month, day, 23, 59, 0, 0);
       }
 
-      const parts = dueDateStr.split('-');
-      if (parts.length !== 3) return null;
-      year = parseInt(parts[0], 10);
-      month = parseInt(parts[1], 10) - 1;
-      day = parseInt(parts[2], 10);
+      if (isNaN(target.getTime())) return null;
 
-      // Default trigger to 09:00:00 AM on the due date
-      const target = new Date(year, month, day, 9, 0, 0, 0);
-
-      // If target time is in past for today, bump to 1 hour from now or next available minute
-      const now = new Date();
-      if (target.getTime() <= now.getTime()) {
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        if (dueDateStr === todayStr) {
-          // If task due date is today and 9 AM has passed, set reminder for 1 hour from now (or 10 mins if near end of day)
-          const adjusted = new Date(now.getTime() + 60 * 60 * 1000);
-          return adjusted;
-        }
-        // If due date was in the past (before today), do not schedule a past notification
+      // Do not schedule notifications for dates/times in the past
+      if (target.getTime() <= Date.now()) {
         return null;
       }
 

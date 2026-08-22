@@ -9,9 +9,8 @@ import {
   ScrollView,
   Animated,
   Dimensions,
-  Alert,
 } from 'react-native';
-import { Calendar as CalendarIcon, X } from 'lucide-react-native';
+import { Calendar as CalendarIcon, Clock as ClockIcon, X, AlertCircle } from 'lucide-react-native';
 import { useTheme } from './ThemeContext';
 import { Intent } from '../db/taskRepository';
 
@@ -24,6 +23,31 @@ interface IntentModalProps {
 
 const { height } = Dimensions.get('window');
 
+/**
+ * Combines date string (YYYY-MM-DD), hours (0-23), and minutes (0-59) into an ISO string.
+ */
+const getCombinedISO = (dateStr: string | null, hrs: number, mins: number): string | null => {
+  if (!dateStr) return null;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const dateObj = new Date(year, month, day, hrs, mins, 0, 0);
+  if (isNaN(dateObj.getTime())) return null;
+  return dateObj.toISOString();
+};
+
+/**
+ * Formats hours (0-23) and minutes (0-59) for editorial display (e.g. "5:00 PM").
+ */
+const formatTimeDisplay = (hrs: number, mins: number): string => {
+  const ampm = hrs >= 12 ? 'PM' : 'AM';
+  const displayHrs = hrs % 12 === 0 ? 12 : hrs % 12;
+  const displayMins = String(mins).padStart(2, '0');
+  return `${displayHrs}:${displayMins} ${ampm}`;
+};
+
 export const IntentModal: React.FC<IntentModalProps> = ({
   visible,
   intent,
@@ -31,31 +55,66 @@ export const IntentModal: React.FC<IntentModalProps> = ({
   onSave,
 }) => {
   const { colors } = useTheme();
-  
-  // Form fields
+
+  // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [dueDate, setDueDate] = useState<string | null>(null);
-  
-  // Custom Date Picker Modal Visibility
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedHours, setSelectedHours] = useState<number>(17); // Default 5:00 PM
+  const [selectedMinutes, setSelectedMinutes] = useState<number>(0);
+
+  // Picker Modals Visibility
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+
+  // Temporary time picker state (for live editing inside time modal)
+  const [tempHours, setTempHours] = useState<number>(17);
+  const [tempMinutes, setTempMinutes] = useState<number>(0);
 
   // Animations
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // React on visible state
+  // Sync state when modal becomes visible or intent changes
   useEffect(() => {
     if (visible) {
-      if (intent) {
+      if (intent && intent.due_date) {
         setTitle(intent.title);
         setDescription(intent.description || '');
-        setDueDate(intent.due_date);
+
+        if (intent.due_date.includes('T')) {
+          const d = new Date(intent.due_date);
+          if (!isNaN(d.getTime())) {
+            const yr = d.getFullYear();
+            const mo = String(d.getMonth() + 1).padStart(2, '0');
+            const da = String(d.getDate()).padStart(2, '0');
+            setSelectedDate(`${yr}-${mo}-${da}`);
+            setSelectedHours(d.getHours());
+            setSelectedMinutes(d.getMinutes());
+          } else {
+            setSelectedDate(null);
+            setSelectedHours(17);
+            setSelectedMinutes(0);
+          }
+        } else {
+          // Date-only legacy string
+          setSelectedDate(intent.due_date);
+          setSelectedHours(17);
+          setSelectedMinutes(0);
+        }
+      } else if (intent) {
+        setTitle(intent.title);
+        setDescription(intent.description || '');
+        setSelectedDate(null);
+        setSelectedHours(17);
+        setSelectedMinutes(0);
       } else {
         setTitle('');
         setDescription('');
-        setDueDate(null);
+        setSelectedDate(null);
+        setSelectedHours(17);
+        setSelectedMinutes(0);
       }
       setErrorText(null);
 
@@ -90,6 +149,11 @@ export const IntentModal: React.FC<IntentModalProps> = ({
     }
   }, [visible, intent, slideAnim, fadeAnim]);
 
+  // Derived target combined datetime & past check
+  const combinedISO = getCombinedISO(selectedDate, selectedHours, selectedMinutes);
+  const combinedDateObj = combinedISO ? new Date(combinedISO) : null;
+  const isPastTime = combinedDateObj ? combinedDateObj.getTime() <= Date.now() : false;
+
   const handleSave = async () => {
     if (!title.trim()) {
       setErrorText('The intent requires a title.');
@@ -97,28 +161,46 @@ export const IntentModal: React.FC<IntentModalProps> = ({
     }
 
     try {
-      await onSave(title.trim(), description.trim(), dueDate);
+      const finalDueDateISO = combineDateTimeToISO(selectedDate, selectedHours, selectedMinutes);
+      await onSave(title.trim(), description.trim(), finalDueDateISO);
       onClose();
     } catch (err: any) {
       setErrorText(err?.message || 'Attempt failed. Please retry.');
     }
   };
 
-  // Date handlers
+  const combineDateTimeToISO = (dateStr: string | null, hrs: number, mins: number): string | null => {
+    return getCombinedISO(dateStr, hrs, mins);
+  };
+
+  // Date Quick Preset Handlers
   const setQuickDate = (type: 'today' | 'tomorrow' | 'nextWeek' | 'clear') => {
     const d = new Date();
-    d.setHours(0, 0, 0, 0);
 
     if (type === 'today') {
-      setDueDate(d.toISOString().split('T')[0]);
+      const yr = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      setSelectedDate(`${yr}-${mo}-${da}`);
+      // If current hour is past 5 PM today, default to 1 hour from now for convenience
+      if (d.getHours() >= 17) {
+        setSelectedHours(Math.min(d.getHours() + 1, 23));
+        setSelectedMinutes(0);
+      }
     } else if (type === 'tomorrow') {
       d.setDate(d.getDate() + 1);
-      setDueDate(d.toISOString().split('T')[0]);
+      const yr = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      setSelectedDate(`${yr}-${mo}-${da}`);
     } else if (type === 'nextWeek') {
       d.setDate(d.getDate() + 7);
-      setDueDate(d.toISOString().split('T')[0]);
+      const yr = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      setSelectedDate(`${yr}-${mo}-${da}`);
     } else {
-      setDueDate(null);
+      setSelectedDate(null);
     }
   };
 
@@ -131,7 +213,7 @@ export const IntentModal: React.FC<IntentModalProps> = ({
     const day = parseInt(parts[2], 10);
     const date = new Date(Number(year), month, day);
     return date.toLocaleDateString(undefined, {
-      month: 'long',
+      month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
@@ -139,7 +221,6 @@ export const IntentModal: React.FC<IntentModalProps> = ({
 
   // Custom Calendar Generator for Custom Date Picker Modal
   const renderCalendar = () => {
-    const today = new Date();
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
@@ -153,7 +234,7 @@ export const IntentModal: React.FC<IntentModalProps> = ({
     };
 
     const getFirstDayOfMonth = (month: number, year: number) => {
-      return new Date(year, month, 1).getDay(); // 0 is Sunday, 6 is Saturday
+      return new Date(year, month, 1).getDay();
     };
 
     const daysInMonth = getDaysInMonth(currentMonth, currentYear);
@@ -180,7 +261,6 @@ export const IntentModal: React.FC<IntentModalProps> = ({
     const weeks: (number | null)[][] = [];
     let currentWeek: (number | null)[] = Array(7).fill(null);
 
-    // Fill offset days
     for (let i = 0; i < firstDay; i++) {
       currentWeek[i] = null;
     }
@@ -202,7 +282,7 @@ export const IntentModal: React.FC<IntentModalProps> = ({
     const selectDateVal = (day: number) => {
       const pad = (num: number) => (num < 10 ? '0' + num : num);
       const output = `${currentYear}-${pad(currentMonth + 1)}-${pad(day)}`;
-      setDueDate(output);
+      setSelectedDate(output);
       setShowDatePicker(false);
     };
 
@@ -210,7 +290,6 @@ export const IntentModal: React.FC<IntentModalProps> = ({
       <Modal transparent visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
         <View style={styles.calendarOverlay}>
           <View style={[styles.calendarCard, { backgroundColor: colors.cardBg, borderColor: colors.borderColor }]}>
-            {/* Header */}
             <View style={styles.calendarHeader}>
               <Pressable onPress={prevMonthAction} style={styles.navText}>
                 <Text style={{ color: colors.primary, fontSize: 16 }}>Prev</Text>
@@ -223,7 +302,6 @@ export const IntentModal: React.FC<IntentModalProps> = ({
               </Pressable>
             </View>
 
-            {/* Weekdays */}
             <View style={styles.weekdaysRow}>
               {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
                 <Text key={idx} style={[styles.weekdayText, { color: colors.mutedFg }]}>
@@ -232,14 +310,13 @@ export const IntentModal: React.FC<IntentModalProps> = ({
               ))}
             </View>
 
-            {/* Grid */}
             <View style={styles.calendarGrid}>
               {weeks.map((week, wIdx) => (
                 <View key={wIdx} style={styles.calendarWeek}>
                   {week.map((day, dIdx) => {
                     const isSelected =
                       day !== null &&
-                      dueDate ===
+                      selectedDate ===
                         `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     return (
                       <Pressable
@@ -270,8 +347,173 @@ export const IntentModal: React.FC<IntentModalProps> = ({
                 { backgroundColor: colors.mutedBg, opacity: pressed ? 0.8 : 1 },
               ]}
             >
-              <Text style={{ color: colors.foreground }}>Cancel</Text>
+              <Text style={{ color: colors.foreground }}>Done</Text>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Custom Editorial Time Picker Modal
+  const renderTimePicker = () => {
+    const isAm = tempHours < 12;
+    const hour12Val = tempHours % 12 === 0 ? 12 : tempHours % 12;
+
+    const setHour12 = (h12: number) => {
+      let newH24 = isAm ? (h12 === 12 ? 0 : h12) : (h12 === 12 ? 12 : h12 + 12);
+      setTempHours(newH24);
+    };
+
+    const toggleAmPm = (targetIsAm: boolean) => {
+      if (targetIsAm && !isAm) {
+        setTempHours(tempHours - 12);
+      } else if (!targetIsAm && isAm) {
+        setTempHours(tempHours + 12);
+      }
+    };
+
+    const confirmTime = () => {
+      setSelectedHours(tempHours);
+      setSelectedMinutes(tempMinutes);
+      setShowTimePicker(false);
+    };
+
+    return (
+      <Modal
+        transparent
+        visible={showTimePicker}
+        onRequestClose={() => setShowTimePicker(false)}
+      >
+        <View style={styles.calendarOverlay}>
+          <View style={[styles.timePickerCard, { backgroundColor: colors.cardBg, borderColor: colors.borderColor }]}>
+            <Text style={[styles.timePickerTitle, { color: colors.foreground }]}>Select Exact Time</Text>
+
+            {/* Time Display Header */}
+            <View style={[styles.timeDisplayBox, { backgroundColor: colors.mutedBg, borderColor: colors.borderColor }]}>
+              <Text style={[styles.timeDisplayText, { color: colors.foreground }]}>
+                {formatTimeDisplay(tempHours, tempMinutes)}
+              </Text>
+            </View>
+
+            {/* Quick Time Presets */}
+            <Text style={[styles.pickerSectionLabel, { color: colors.mutedFg }]}>Quick Presets</Text>
+            <View style={styles.timePresetRow}>
+              {[
+                { label: '9 AM', hrs: 9, mins: 0 },
+                { label: '12 PM', hrs: 12, mins: 0 },
+                { label: '3 PM', hrs: 15, mins: 0 },
+                { label: '5 PM', hrs: 17, mins: 0 },
+                { label: '8 PM', hrs: 20, mins: 0 },
+              ].map((p) => (
+                <Pressable
+                  key={p.label}
+                  onPress={() => {
+                    setTempHours(p.hrs);
+                    setTempMinutes(p.mins);
+                  }}
+                  style={({ pressed }) => [
+                    styles.timePresetChip,
+                    {
+                      backgroundColor: tempHours === p.hrs && tempMinutes === p.mins ? colors.primary : colors.mutedBg,
+                      opacity: pressed ? 0.8 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '500', color: tempHours === p.hrs && tempMinutes === p.mins ? '#ffffff' : colors.foreground }}>
+                    {p.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* AM / PM Selector */}
+            <View style={styles.ampmRow}>
+              <Pressable
+                onPress={() => toggleAmPm(true)}
+                style={[
+                  styles.ampmBtn,
+                  { backgroundColor: isAm ? colors.primary : colors.mutedBg },
+                ]}
+              >
+                <Text style={{ color: isAm ? '#ffffff' : colors.foreground, fontWeight: '600', fontSize: 13 }}>AM</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => toggleAmPm(false)}
+                style={[
+                  styles.ampmBtn,
+                  { backgroundColor: !isAm ? colors.primary : colors.mutedBg },
+                ]}
+              >
+                <Text style={{ color: !isAm ? '#ffffff' : colors.foreground, fontWeight: '600', fontSize: 13 }}>PM</Text>
+              </Pressable>
+            </View>
+
+            {/* Hour Selector (1-12) */}
+            <Text style={[styles.pickerSectionLabel, { color: colors.mutedFg }]}>Hour</Text>
+            <View style={styles.gridRow}>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => {
+                const isSelected = hour12Val === h;
+                return (
+                  <Pressable
+                    key={h}
+                    onPress={() => setHour12(h)}
+                    style={[
+                      styles.gridItem,
+                      { backgroundColor: isSelected ? colors.primary : colors.mutedBg },
+                    ]}
+                  >
+                    <Text style={{ color: isSelected ? '#ffffff' : colors.foreground, fontSize: 13, fontWeight: '500' }}>
+                      {h}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Minute Selector */}
+            <Text style={[styles.pickerSectionLabel, { color: colors.mutedFg }]}>Minute</Text>
+            <View style={styles.gridRow}>
+              {[0, 15, 30, 45].map((m) => {
+                const isSelected = tempMinutes === m;
+                return (
+                  <Pressable
+                    key={m}
+                    onPress={() => setTempMinutes(m)}
+                    style={[
+                      styles.minuteGridItem,
+                      { backgroundColor: isSelected ? colors.primary : colors.mutedBg },
+                    ]}
+                  >
+                    <Text style={{ color: isSelected ? '#ffffff' : colors.foreground, fontSize: 13, fontWeight: '500' }}>
+                      :{String(m).padStart(2, '0')}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Modal Buttons */}
+            <View style={styles.timeActionRow}>
+              <Pressable
+                onPress={() => setShowTimePicker(false)}
+                style={({ pressed }) => [
+                  styles.timeCancelBtn,
+                  { backgroundColor: colors.mutedBg, opacity: pressed ? 0.8 : 1 },
+                ]}
+              >
+                <Text style={{ color: colors.foreground }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmTime}
+                style={({ pressed }) => [
+                  styles.timeSaveBtn,
+                  { backgroundColor: colors.foreground, opacity: pressed ? 0.8 : 1 },
+                ]}
+              >
+                <Text style={{ color: colors.background, fontWeight: '600' }}>Confirm Time</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -383,36 +625,74 @@ export const IntentModal: React.FC<IntentModalProps> = ({
               />
             </View>
 
-            {/* Due Date Picker Group */}
+            {/* Due Date & Time Picker Group */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
                 Temporal Target (optional)
               </Text>
               
-              <Pressable
-                onPress={() => setShowDatePicker(true)}
-                style={({ pressed }) => [
-                  styles.dateTrigger,
-                  {
-                    backgroundColor: colors.mutedBg,
-                    borderColor: colors.borderColor,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}
-              >
-                <CalendarIcon size={16} color={colors.foreground} />
-                <Text style={[styles.dateTriggerText, { color: colors.foreground }]}>
-                  {formatDateString(dueDate)}
-                </Text>
-              </Pressable>
+              {/* Date & Time Triggers Row */}
+              <View style={styles.triggerPairRow}>
+                {/* Date Trigger */}
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  style={({ pressed }) => [
+                    styles.dateTrigger,
+                    {
+                      backgroundColor: colors.mutedBg,
+                      borderColor: colors.borderColor,
+                      opacity: pressed ? 0.8 : 1,
+                      flex: 1,
+                    },
+                  ]}
+                >
+                  <CalendarIcon size={16} color={colors.foreground} />
+                  <Text style={[styles.dateTriggerText, { color: colors.foreground }]} numberOfLines={1}>
+                    {formatDateString(selectedDate)}
+                  </Text>
+                </Pressable>
 
-              {dueDate ? (
+                {/* Time Trigger (enabled when date is set) */}
+                {selectedDate ? (
+                  <Pressable
+                    onPress={() => {
+                      setTempHours(selectedHours);
+                      setTempMinutes(selectedMinutes);
+                      setShowTimePicker(true);
+                    }}
+                    style={({ pressed }) => [
+                      styles.dateTrigger,
+                      {
+                        backgroundColor: colors.mutedBg,
+                        borderColor: colors.borderColor,
+                        opacity: pressed ? 0.8 : 1,
+                        flex: 1,
+                      },
+                    ]}
+                  >
+                    <ClockIcon size={16} color={colors.primary} />
+                    <Text style={[styles.dateTriggerText, { color: colors.foreground }]} numberOfLines={1}>
+                      {formatTimeDisplay(selectedHours, selectedMinutes)}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {/* Inline Validation Warning for Past Time */}
+              {selectedDate && isPastTime ? (
+                <View style={styles.warningContainer}>
+                  <AlertCircle size={14} color="#d97706" />
+                  <Text style={styles.warningText}>
+                    Selected time has already passed. The task will save, but no offline reminder will fire.
+                  </Text>
+                </View>
+              ) : selectedDate ? (
                 <Text style={[styles.notificationHint, { color: colors.mutedFg }]}>
-                  An offline local reminder will fire at 09:00 AM on this date.
+                  An offline local reminder will fire on {formatDateString(selectedDate)} at {formatTimeDisplay(selectedHours, selectedMinutes)}.
                 </Text>
               ) : null}
 
-              {/* Quick Chips row */}
+              {/* Quick Date Chips row */}
               <View style={styles.chipsRow}>
                 {[
                   { label: 'Today', value: 'today' },
@@ -424,17 +704,17 @@ export const IntentModal: React.FC<IntentModalProps> = ({
                   let isSelected = false;
                   
                   if (chip.value === 'today') {
-                    isSelected = dueDate === checkToday;
+                    isSelected = selectedDate === checkToday;
                   } else if (chip.value === 'tomorrow') {
                     const tom = new Date();
                     tom.setDate(tom.getDate() + 1);
-                    isSelected = dueDate === tom.toISOString().split('T')[0];
+                    isSelected = selectedDate === tom.toISOString().split('T')[0];
                   } else if (chip.value === 'nextWeek') {
                     const wk = new Date();
                     wk.setDate(wk.getDate() + 7);
-                    isSelected = dueDate === wk.toISOString().split('T')[0];
+                    isSelected = selectedDate === wk.toISOString().split('T')[0];
                   } else if (chip.value === 'clear') {
-                    isSelected = dueDate === null;
+                    isSelected = selectedDate === null;
                   }
 
                   return (
@@ -461,6 +741,46 @@ export const IntentModal: React.FC<IntentModalProps> = ({
                   );
                 })}
               </View>
+
+              {/* Quick Time Chips (only shown if date selected) */}
+              {selectedDate ? (
+                <View style={[styles.chipsRow, { marginTop: 8 }]}>
+                  {[
+                    { label: '9 AM', hrs: 9, mins: 0 },
+                    { label: '12 PM', hrs: 12, mins: 0 },
+                    { label: '3 PM', hrs: 15, mins: 0 },
+                    { label: '5 PM', hrs: 17, mins: 0 },
+                    { label: '8 PM', hrs: 20, mins: 0 },
+                  ].map((tChip) => {
+                    const isSelected = selectedHours === tChip.hrs && selectedMinutes === tChip.mins;
+                    return (
+                      <Pressable
+                        key={tChip.label}
+                        onPress={() => {
+                          setSelectedHours(tChip.hrs);
+                          setSelectedMinutes(tChip.mins);
+                        }}
+                        style={({ pressed }) => [
+                          styles.chip,
+                          {
+                            backgroundColor: isSelected ? colors.primary : colors.mutedBg,
+                            transform: [{ scale: pressed ? 0.95 : 1 }],
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            { color: isSelected ? '#ffffff' : colors.foreground },
+                          ]}
+                        >
+                          {tChip.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
 
             {/* Save Button */}
@@ -482,8 +802,11 @@ export const IntentModal: React.FC<IntentModalProps> = ({
         </Animated.View>
       </View>
 
-      {/* Render custom calendar grid */}
+      {/* Custom calendar grid */}
       {showDatePicker && renderCalendar()}
+
+      {/* Custom time picker */}
+      {showTimePicker && renderTimePicker()}
     </Modal>
   );
 };
@@ -540,6 +863,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  warningContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+    borderRadius: 12,
+    padding: 10,
+    gap: 8,
+    marginBottom: 12,
+  },
+  warningText: {
+    color: '#b45309',
+    fontSize: 12,
+    flex: 1,
+    fontWeight: '500',
+  },
   inputGroup: {
     marginBottom: 24,
   },
@@ -562,17 +902,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     textAlignVertical: 'top',
   },
+  triggerPairRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
   dateTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    gap: 10,
-    marginBottom: 12,
+    gap: 8,
   },
   dateTriggerText: {
-    fontSize: 15,
+    fontSize: 14,
+    flex: 1,
   },
   notificationHint: {
     fontSize: 11,
@@ -674,6 +1019,109 @@ const styles = StyleSheet.create({
   calendarCancel: {
     marginTop: 20,
     width: '100%',
+    paddingVertical: 12,
+    borderRadius: 99,
+    alignItems: 'center',
+  },
+
+  // Time Picker Modal Styles
+  timePickerCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  timePickerTitle: {
+    fontFamily: 'InstrumentSerif-Regular',
+    fontSize: 24,
+    marginBottom: 12,
+  },
+  timeDisplayBox: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  timeDisplayText: {
+    fontFamily: 'InstrumentSerif-Regular',
+    fontSize: 28,
+    letterSpacing: 1,
+  },
+  pickerSectionLabel: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    fontWeight: '600',
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  timePresetRow: {
+    flexDirection: 'row',
+    gap: 6,
+    width: '100%',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  timePresetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 99,
+  },
+  ampmRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginVertical: 10,
+  },
+  ampmBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 99,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'center',
+    width: '100%',
+    marginBottom: 8,
+  },
+  gridItem: {
+    width: 40,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  minuteGridItem: {
+    width: 64,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 16,
+  },
+  timeCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 99,
+    alignItems: 'center',
+  },
+  timeSaveBtn: {
+    flex: 1,
     paddingVertical: 12,
     borderRadius: 99,
     alignItems: 'center',

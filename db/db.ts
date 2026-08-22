@@ -33,6 +33,14 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
       console.log('[Database] Migration: Added notification_id column to intents table.');
     }
 
+    // Migration check: Convert legacy date-only due_date strings (YYYY-MM-DD) to ISO datetime strings (end of day 23:59:00.000Z)
+    await db.execAsync(`
+      UPDATE intents
+      SET due_date = due_date || 'T23:59:00.000Z'
+      WHERE due_date IS NOT NULL
+        AND due_date NOT LIKE '%T%';
+    `);
+
     console.log('[Database] Schema initialized successfully.');
   } catch (error) {
     console.error('[Database] Failed to initialize database schema:', error);

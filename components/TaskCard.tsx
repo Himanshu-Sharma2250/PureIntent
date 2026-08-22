@@ -48,8 +48,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
     // Determine completion status values
     const isOverdue =
       !intent.is_completed &&
-      intent.due_date &&
-      new Date(intent.due_date).getTime() < new Date().setHours(0, 0, 0, 0);
+      !!intent.due_date &&
+      new Date(intent.due_date).getTime() < Date.now();
 
     const hasActiveNotification = !intent.is_completed && !!intent.notification_id;
 
@@ -66,11 +66,23 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(
     const formatDate = (isoString: string) => {
       try {
         const date = new Date(isoString);
-        return date.toLocaleDateString(undefined, {
+        if (isNaN(date.getTime())) return isoString;
+
+        const dateFormatted = date.toLocaleDateString(undefined, {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
         });
+
+        if (isoString.includes('T')) {
+          const timeFormatted = date.toLocaleTimeString(undefined, {
+            hour: 'numeric',
+            minute: '2-digit',
+          });
+          return `${dateFormatted} at ${timeFormatted}`;
+        }
+
+        return dateFormatted;
       } catch {
         return isoString;
       }

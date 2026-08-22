@@ -1,9 +1,10 @@
 {
   "name": "todo",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/instrument-serif": "^0.4.1",
+    "@react-native-community/datetimepicker": "^8.3.0",
     "expo": "~57.0.1",
     "expo-font": "~57.0.1",
     "expo-notifications": "~57.0.11",
