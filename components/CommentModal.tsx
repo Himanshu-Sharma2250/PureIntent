@@ -12,11 +12,11 @@ import {
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useTheme } from './ThemeContext';
-import { Note } from '../db/noteRepository';
+import { Comment } from '../db/commentRepository';
 
-interface NoteModalProps {
+interface CommentModalProps {
   visible: boolean;
-  note: Note | null; // Null if adding, otherwise editing
+  comment: Comment | null; // Null if adding, otherwise editing
   onClose: () => void;
   onSave: (content: string) => Promise<void>;
 }
@@ -24,11 +24,11 @@ interface NoteModalProps {
 const { height } = Dimensions.get('window');
 
 /**
- * Editorial modal for creating and updating notes with a single content text field (no title).
+ * Editorial modal for creating and updating comments with a single content text field.
  */
-export const NoteModal: React.FC<NoteModalProps> = ({
+export const CommentModal: React.FC<CommentModalProps> = ({
   visible,
-  note,
+  comment,
   onClose,
   onSave,
 }) => {
@@ -43,8 +43,8 @@ export const NoteModal: React.FC<NoteModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      if (note) {
-        setContent(note.content);
+      if (comment) {
+        setContent(comment.content);
       } else {
         setContent('');
       }
@@ -79,12 +79,12 @@ export const NoteModal: React.FC<NoteModalProps> = ({
         }),
       ]).start();
     }
-  }, [visible, note, slideAnim, fadeAnim]);
+  }, [visible, comment, slideAnim, fadeAnim]);
 
   const handleSave = async () => {
     const trimmed = content.trim();
     if (!trimmed) {
-      setErrorText('Note content cannot be empty.');
+      setErrorText('Comment content cannot be empty.');
       return;
     }
 
@@ -92,7 +92,7 @@ export const NoteModal: React.FC<NoteModalProps> = ({
       await onSave(trimmed);
       onClose();
     } catch (err: any) {
-      setErrorText(err?.message || 'Failed to save note.');
+      setErrorText(err?.message || 'Failed to save comment.');
     }
   };
 
@@ -132,7 +132,7 @@ export const NoteModal: React.FC<NoteModalProps> = ({
             {/* Modal Title Row */}
             <View style={styles.modalHeader}>
               <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                {note ? 'Revise Note' : 'Add Note'}
+                {comment ? 'Revise Comment' : 'Add Comment'}
               </Text>
               <Pressable
                 onPress={onClose}
@@ -158,7 +158,7 @@ export const NoteModal: React.FC<NoteModalProps> = ({
             {/* Content Input field */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
-                Note Content
+                Comment Content
               </Text>
               <TextInput
                 value={content}
@@ -194,7 +194,7 @@ export const NoteModal: React.FC<NoteModalProps> = ({
               ]}
             >
               <Text style={[styles.saveButtonText, { color: colors.background }]}>
-                {note ? 'Confirm Revision' : 'Save Note'}
+                {comment ? 'Confirm Revision' : 'Save Comment'}
               </Text>
             </Pressable>
           </ScrollView>

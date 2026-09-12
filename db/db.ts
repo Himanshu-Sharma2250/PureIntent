@@ -20,7 +20,27 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE TABLE IF NOT EXISTS notes (
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+    `);
+
+    // Migration check: Rename existing notes table to comments if present from v3.0.0
+    const existingTables = await db.getAllAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('notes', 'comments');"
+    );
+    const hasNotesTable = existingTables.some((t) => t.name === 'notes');
+    const hasCommentsTable = existingTables.some((t) => t.name === 'comments');
+
+    if (hasNotesTable && !hasCommentsTable) {
+      await db.execAsync('ALTER TABLE notes RENAME TO comments;');
+      console.log('[Database] Migration: Renamed notes table to comments.');
+    }
+
+    // Ensure comments table exists
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         task_id INTEGER NOT NULL,
         content TEXT NOT NULL,
@@ -29,9 +49,15 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
         FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE
       );
 
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
+      CREATE TABLE IF NOT EXISTS time_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL,
+        time_spent_minutes INTEGER NOT NULL,
+        description TEXT NOT NULL,
+        work_date TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE
       );
     `);
 

@@ -5,6 +5,26 @@ All notable changes to PureIntent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-09-12
+
+### Added
+- **Time Logging Feature (100% Offline)**: JIRA-style work session logging for tasks, stored locally in SQLite with zero network dependencies.
+- **Time Logs SQLite Schema & Cascade Deletion (`db/db.ts`)**: Added `time_logs` table with `FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE` to ensure time log entries automatically delete with their parent task without leaving orphaned rows.
+- **Dedicated Time Log Repository (`db/timeLogRepository.ts`)**: Encapsulated CRUD methods (`createTimeLog`, `getTimeLogsByTaskId`, `updateTimeLog`, `deleteTimeLog`, `getTotalTimeSpent`) interacting with SQLite database.
+- **Reactive Time Logs Hook (`hooks/useTimeLogs.ts`)**: Reactive state hook for time log CRUD operations, tracking real-time total duration logged per task.
+- **Editorial Time Log Components (`components/TimeLogCard.tsx`, `components/TimeLogModal.tsx`)**: Minimalist time log cards with formatted duration badges (`Xh Ym`), work date, description, and action buttons; slide-up modal with hours & minutes inputs, quick duration chips (`+15m`, `+30m`, `+1h`, `+2h`), custom calendar date selector with backdating support, and empty-submission / future-date validations.
+- **Prominent Total Time Display (`screens/TaskDetailScreen.tsx`)**: Displays aggregate time logged directly within the task detail header card and section header.
+
+### Changed
+- **Renamed Notes → Comments (Codebase-wide)**: Unified terminology across database tables, repositories, hooks, components, and user-facing copy.
+- **Safe Database Schema Migration (`db/db.ts`)**: Automated database migration during initialization to rename existing `notes` table to `comments` via `ALTER TABLE notes RENAME TO comments;`, safely preserving all user data.
+- **Renamed Repository & Types (`db/commentRepository.ts`)**: Renamed from `db/noteRepository.ts` (`createComment`, `getCommentsByTaskId`, `updateComment`, `deleteComment`, `Comment`).
+- **Renamed Reactive Hook (`hooks/useComments.ts`)**: Renamed from `hooks/useNotes.ts` (`useComments`).
+- **Renamed Editorial Components (`components/CommentCard.tsx`, `components/CommentModal.tsx`)**: Renamed from `NoteCard.tsx` and `NoteModal.tsx` with updated typography and UI copy.
+- **Updated Task Detail Screen (`screens/TaskDetailScreen.tsx`)**: Refactored to include both the renamed Comments section and the new Time Logging section with cohesive visual hierarchy and interaction models.
+
+---
+
 ## [3.0.0] - 2026-08-22
 
 ### Added

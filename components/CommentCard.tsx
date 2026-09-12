@@ -2,21 +2,21 @@ import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, Pressable, Animated } from 'react-native';
 import { Edit2, Trash2 } from 'lucide-react-native';
 import { useTheme } from './ThemeContext';
-import { Note } from '../db/noteRepository';
+import { Comment } from '../db/commentRepository';
 
-interface NoteCardProps {
-  note: Note;
+interface CommentCardProps {
+  comment: Comment;
   index: number;
-  onEdit: (note: Note) => void;
-  onDelete: (note: Note) => void;
+  onEdit: (comment: Comment) => void;
+  onDelete: (comment: Comment) => void;
 }
 
 /**
- * Renders an individual Note card with staggered entrance animation,
+ * Renders an individual Comment card with staggered entrance animation,
  * editorial typography, timestamp, and edit/delete actions.
  */
-export const NoteCard: React.FC<NoteCardProps> = React.memo(
-  ({ note, index, onEdit, onDelete }) => {
+export const CommentCard: React.FC<CommentCardProps> = React.memo(
+  ({ comment, index, onEdit, onDelete }) => {
     const { colors } = useTheme();
 
     const animValue = useRef(new Animated.Value(0)).current;
@@ -71,22 +71,22 @@ export const NoteCard: React.FC<NoteCardProps> = React.memo(
             },
           ]}
         >
-          {/* Note Content */}
+          {/* Comment Content */}
           <Text style={[styles.contentText, { color: colors.foreground }]}>
-            {note.content}
+            {comment.content}
           </Text>
 
           {/* Footer with Timestamp and Action Buttons */}
           <View style={[styles.footer, { borderTopColor: colors.borderColor }]}>
             <Text style={[styles.timestampText, { color: colors.mutedFg }]}>
-              {formatTimestamp(note.updated_at || note.created_at)}
+              {formatTimestamp(comment.updated_at || comment.created_at)}
             </Text>
 
             <View style={styles.actionsRow}>
-              {/* Edit Note Button */}
+              {/* Edit Comment Button */}
               <Pressable
-                onPress={() => onEdit(note)}
-                accessibilityLabel="Edit note"
+                onPress={() => onEdit(comment)}
+                accessibilityLabel="Edit comment"
                 style={({ pressed }) => [
                   styles.actionButton,
                   {
@@ -98,10 +98,10 @@ export const NoteCard: React.FC<NoteCardProps> = React.memo(
                 <Edit2 size={13} color={colors.foreground} />
               </Pressable>
 
-              {/* Delete Note Button */}
+              {/* Delete Comment Button */}
               <Pressable
-                onPress={() => onDelete(note)}
-                accessibilityLabel="Delete note"
+                onPress={() => onDelete(comment)}
+                accessibilityLabel="Delete comment"
                 style={({ pressed }) => [
                   styles.actionButton,
                   {
@@ -120,7 +120,7 @@ export const NoteCard: React.FC<NoteCardProps> = React.memo(
   }
 );
 
-NoteCard.displayName = 'NoteCard';
+CommentCard.displayName = 'CommentCard';
 
 const styles = StyleSheet.create({
   container: {

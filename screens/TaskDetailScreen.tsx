@@ -20,17 +20,22 @@ import {
   Edit2,
   Trash2,
   Plus,
+  Timer,
 } from 'lucide-react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTheme } from '../components/ThemeContext';
 import { useSQLiteContext } from 'expo-sqlite';
 import { taskRepository, Intent } from '../db/taskRepository';
 import { notificationService } from '../services/notificationService';
-import { useNotes } from '../hooks/useNotes';
-import { NoteCard } from '../components/NoteCard';
-import { NoteModal } from '../components/NoteModal';
+import { useComments } from '../hooks/useComments';
+import { CommentCard } from '../components/CommentCard';
+import { CommentModal } from '../components/CommentModal';
+import { useTimeLogs } from '../hooks/useTimeLogs';
+import { TimeLogCard, formatMinutesToDuration } from '../components/TimeLogCard';
+import { TimeLogModal } from '../components/TimeLogModal';
 import { IntentModal } from '../components/IntentModal';
-import { Note } from '../db/noteRepository';
+import { Comment } from '../db/commentRepository';
+import { TimeLog } from '../db/timeLogRepository';
 
 type TaskDetailRouteParams = {
   TaskDetail: { taskId: number };
@@ -48,17 +53,29 @@ export const TaskDetailScreen: React.FC = () => {
 
   // Modal states
   const [isEditTaskVisible, setIsEditTaskVisible] = useState<boolean>(false);
-  const [isNoteModalVisible, setIsNoteModalVisible] = useState<boolean>(false);
-  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [isCommentModalVisible, setIsCommentModalVisible] = useState<boolean>(false);
+  const [selectedComment, setSelectedComment] = useState<Comment | null>(null);
+  const [isTimeLogModalVisible, setIsTimeLogModalVisible] = useState<boolean>(false);
+  const [selectedTimeLog, setSelectedTimeLog] = useState<TimeLog | null>(null);
 
-  // Notes Hook
+  // Comments Hook
   const {
-    notes,
-    loading: notesLoading,
-    addNote,
-    updateNote,
-    deleteNote,
-  } = useNotes(taskId);
+    comments,
+    loading: commentsLoading,
+    addComment,
+    updateComment,
+    deleteComment,
+  } = useComments(taskId);
+
+  // Time Logs Hook
+  const {
+    timeLogs,
+    totalMinutes,
+    loading: timeLogsLoading,
+    addTimeLog,
+    updateTimeLog,
+    deleteTimeLog,
+  } = useTimeLogs(taskId);
 
   // Fetch current task
   const loadTask = useCallback(async () => {
@@ -131,12 +148,12 @@ export const TaskDetailScreen: React.FC = () => {
     }
   };
 
-  // Delete task with confirmation (cascades to notes in SQLite)
+  // Delete task with confirmation (cascades to comments and time_logs in SQLite)
   const handleDeleteTask = () => {
     if (!task) return;
     Alert.alert(
       'Delete Intent',
-      'Are you sure you want to delete this intent and all of its notes? This action cannot be undone.',
+      'Are you sure you want to delete this intent, all of its comments, and logged time? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -158,35 +175,69 @@ export const TaskDetailScreen: React.FC = () => {
     );
   };
 
-  // Note actions
-  const handleOpenAddNote = () => {
-    setSelectedNote(null);
-    setIsNoteModalVisible(true);
+  // Comment actions
+  const handleOpenAddComment = () => {
+    setSelectedComment(null);
+    setIsCommentModalVisible(true);
   };
 
-  const handleOpenEditNote = (note: Note) => {
-    setSelectedNote(note);
-    setIsNoteModalVisible(true);
+  const handleOpenEditComment = (comment: Comment) => {
+    setSelectedComment(comment);
+    setIsCommentModalVisible(true);
   };
 
-  const handleSaveNote = async (content: string) => {
-    if (selectedNote) {
-      await updateNote(selectedNote.id, content);
+  const handleSaveComment = async (content: string) => {
+    if (selectedComment) {
+      await updateComment(selectedComment.id, content);
     } else {
-      await addNote(content);
+      await addComment(content);
     }
   };
 
-  const handleDeleteNote = (note: Note) => {
+  const handleDeleteComment = (comment: Comment) => {
     Alert.alert(
-      'Delete Note',
-      'Are you sure you want to delete this note?',
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => deleteNote(note.id),
+          onPress: () => deleteComment(comment.id),
+        },
+      ]
+    );
+  };
+
+  // Time Log actions
+  const handleOpenAddTimeLog = () => {
+    setSelectedTimeLog(null);
+    setIsTimeLogModalVisible(true);
+  };
+
+  const handleOpenEditTimeLog = (log: TimeLog) => {
+    setSelectedTimeLog(log);
+    setIsTimeLogModalVisible(true);
+  };
+
+  const handleSaveTimeLog = async (timeSpentMinutes: number, description: string, workDate: string) => {
+    if (selectedTimeLog) {
+      await updateTimeLog(selectedTimeLog.id, timeSpentMinutes, description, workDate);
+    } else {
+      await addTimeLog(timeSpentMinutes, description, workDate);
+    }
+  };
+
+  const handleDeleteTimeLog = (log: TimeLog) => {
+    Alert.alert(
+      'Delete Time Log',
+      'Are you sure you want to delete this work session log?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteTimeLog(log.id),
         },
       ]
     );
@@ -325,6 +376,22 @@ export const TaskDetailScreen: React.FC = () => {
 
           {/* Metadata Badges */}
           <View style={[styles.metaSection, { borderTopColor: colors.borderColor }]}>
+            {/* Total Time Logged Badge */}
+            <View style={styles.metaBadge}>
+              <Timer size={13} color={totalMinutes > 0 ? colors.primary : colors.mutedFg} />
+              <Text
+                style={[
+                  styles.metaText,
+                  {
+                    color: totalMinutes > 0 ? colors.foreground : colors.mutedFg,
+                    fontWeight: totalMinutes > 0 ? '600' : 'normal',
+                  },
+                ]}
+              >
+                {formatMinutesToDuration(totalMinutes)} logged
+              </Text>
+            </View>
+
             {task.due_date ? (
               <View style={styles.metaBadge}>
                 <Calendar size={13} color={isOverdue ? '#dc2626' : colors.primary} />
@@ -394,25 +461,26 @@ export const TaskDetailScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Notes & Breakdown Section */}
-        <View style={styles.notesSectionHeader}>
-          <View style={styles.notesTitleWrapper}>
-            <Text style={[styles.notesSectionTitle, { color: colors.foreground }]}>
-              Notes
+        {/* Time Logging Section */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleWrapper}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              Time Logs
             </Text>
-            {notes.length > 0 ? (
+            {timeLogs.length > 0 ? (
               <View style={[styles.countBadge, { backgroundColor: colors.mutedBg }]}>
                 <Text style={[styles.countText, { color: colors.mutedFg }]}>
-                  {notes.length}
+                  {timeLogs.length} • {formatMinutesToDuration(totalMinutes)}
                 </Text>
               </View>
             ) : null}
           </View>
 
           <Pressable
-            onPress={handleOpenAddNote}
+            onPress={handleOpenAddTimeLog}
+            accessibilityLabel="Log time"
             style={({ pressed }) => [
-              styles.addNoteBtn,
+              styles.sectionAddBtn,
               {
                 backgroundColor: colors.foreground,
                 transform: [{ scale: pressed ? 0.94 : 1 }],
@@ -420,36 +488,91 @@ export const TaskDetailScreen: React.FC = () => {
             ]}
           >
             <Plus size={14} color={colors.background} strokeWidth={2.5} />
-            <Text style={[styles.addNoteBtnText, { color: colors.background }]}>
-              Add Note
+            <Text style={[styles.sectionAddBtnText, { color: colors.background }]}>
+              Log Time
             </Text>
           </Pressable>
         </View>
 
-        {/* Notes List */}
-        {notes.length === 0 ? (
-          <View style={[styles.emptyNotesBox, { borderColor: colors.borderColor }]}>
+        {/* Time Logs List */}
+        {timeLogs.length === 0 ? (
+          <View style={[styles.emptyBox, { borderColor: colors.borderColor }]}>
+            <Text style={[styles.emptyHeadline, { color: colors.foreground }]}>
+              Unrecorded.
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedFg }]}>
+              No time logged yet — track your first work session.
+            </Text>
+          </View>
+        ) : (
+          timeLogs.map((item, index) => (
+            <TimeLogCard
+              key={item.id}
+              timeLog={item}
+              index={index}
+              onEdit={handleOpenEditTimeLog}
+              onDelete={handleDeleteTimeLog}
+            />
+          ))
+        )}
+
+        {/* Comments Section */}
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <View style={styles.sectionTitleWrapper}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              Comments
+            </Text>
+            {comments.length > 0 ? (
+              <View style={[styles.countBadge, { backgroundColor: colors.mutedBg }]}>
+                <Text style={[styles.countText, { color: colors.mutedFg }]}>
+                  {comments.length}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <Pressable
+            onPress={handleOpenAddComment}
+            accessibilityLabel="Add comment"
+            style={({ pressed }) => [
+              styles.sectionAddBtn,
+              {
+                backgroundColor: colors.foreground,
+                transform: [{ scale: pressed ? 0.94 : 1 }],
+              },
+            ]}
+          >
+            <Plus size={14} color={colors.background} strokeWidth={2.5} />
+            <Text style={[styles.sectionAddBtnText, { color: colors.background }]}>
+              Add Comment
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Comments List */}
+        {comments.length === 0 ? (
+          <View style={[styles.emptyBox, { borderColor: colors.borderColor }]}>
             <Text style={[styles.emptyHeadline, { color: colors.foreground }]}>
               Quietude.
             </Text>
             <Text style={[styles.emptySubtitle, { color: colors.mutedFg }]}>
-              No notes yet — break this task down into steps or capture insights.
+              No comments yet — break this task down into steps or capture insights.
             </Text>
           </View>
         ) : (
-          notes.map((item, index) => (
-            <NoteCard
+          comments.map((item, index) => (
+            <CommentCard
               key={item.id}
-              note={item}
+              comment={item}
               index={index}
-              onEdit={handleOpenEditNote}
-              onDelete={handleDeleteNote}
+              onEdit={handleOpenEditComment}
+              onDelete={handleDeleteComment}
             />
           ))
         )}
       </ScrollView>
 
-      {/* Edit Intent Modal (Reusing existing component) */}
+      {/* Edit Intent Modal */}
       <IntentModal
         visible={isEditTaskVisible}
         intent={task}
@@ -457,15 +580,26 @@ export const TaskDetailScreen: React.FC = () => {
         onSave={handleSaveTask}
       />
 
-      {/* Note Compose / Edit Modal */}
-      <NoteModal
-        visible={isNoteModalVisible}
-        note={selectedNote}
+      {/* Time Log Modal */}
+      <TimeLogModal
+        visible={isTimeLogModalVisible}
+        timeLog={selectedTimeLog}
         onClose={() => {
-          setIsNoteModalVisible(false);
-          setSelectedNote(null);
+          setIsTimeLogModalVisible(false);
+          setSelectedTimeLog(null);
         }}
-        onSave={handleSaveNote}
+        onSave={handleSaveTimeLog}
+      />
+
+      {/* Comment Compose / Edit Modal */}
+      <CommentModal
+        visible={isCommentModalVisible}
+        comment={selectedComment}
+        onClose={() => {
+          setIsCommentModalVisible(false);
+          setSelectedComment(null);
+        }}
+        onSave={handleSaveComment}
       />
     </SafeAreaView>
   );
@@ -512,13 +646,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 40,
+    paddingBottom: 48,
   },
   taskHeroCard: {
     borderRadius: 20,
     borderWidth: 1,
     padding: 20,
-    marginBottom: 28,
+    marginBottom: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -579,18 +713,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  notesSectionHeader: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  notesTitleWrapper: {
+  sectionTitleWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  notesSectionTitle: {
+  sectionTitle: {
     fontFamily: 'InstrumentSerif-Regular',
     fontSize: 26,
   },
@@ -603,7 +737,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  addNoteBtn: {
+  sectionAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
@@ -611,19 +745,20 @@ const styles = StyleSheet.create({
     borderRadius: 99,
     gap: 5,
   },
-  addNoteBtnText: {
+  sectionAddBtnText: {
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-  emptyNotesBox: {
+  emptyBox: {
     borderRadius: 16,
     borderWidth: 1,
     borderStyle: 'dashed',
-    paddingVertical: 32,
+    paddingVertical: 28,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 8,
   },
   emptyHeadline: {
     fontFamily: 'InstrumentSerif-Regular',
