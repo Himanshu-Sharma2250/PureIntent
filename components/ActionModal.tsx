@@ -78,6 +78,8 @@ export const ActionModal: React.FC<ActionModalProps> = ({
       visible={visible}
       animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <View style={styles.overlayContainer}>
         {/* Backdrop Tap trigger */}

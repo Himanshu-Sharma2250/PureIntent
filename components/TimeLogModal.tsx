@@ -9,6 +9,7 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { X, Calendar as CalendarIcon, Clock, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useTheme } from './ThemeContext';
@@ -73,6 +74,7 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
   // Animations
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (visible) {
@@ -246,9 +248,11 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
       visible={visible}
       animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <View style={styles.overlayContainer}>
-        {/* Backdrop overlay */}
+        {/* Fullscreen Backdrop overlay */}
         <Animated.View
           style={[
             styles.backdrop,
@@ -261,18 +265,30 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
           <Pressable style={styles.backdropPressable} onPress={onClose} />
         </Animated.View>
 
-        {/* Modal Sheet */}
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.background,
-              borderColor: colors.borderColor,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+        {/* Keyboard-avoiding container lifting the modal sheet above the keyboard */}
+        <KeyboardAvoidingView
+          behavior="padding"
+          style={styles.keyboardAvoidingView}
+          keyboardVerticalOffset={0}
         >
-          <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          {/* Modal Sheet */}
+          <Animated.View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: colors.background,
+                borderColor: colors.borderColor,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <ScrollView
+              ref={scrollViewRef}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={[styles.headerTitle, { color: colors.foreground }]}>
@@ -623,6 +639,9 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
                   setDescription(val);
                   if (errorText) setErrorText(null);
                 }}
+                onFocus={() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }}
                 placeholder={
                   isTimerEntry
                     ? 'What did you accomplish during this session? (Optional)'
@@ -659,6 +678,7 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
             </Pressable>
           </ScrollView>
         </Animated.View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -674,6 +694,11 @@ const styles = StyleSheet.create({
   },
   backdropPressable: {
     flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    width: '100%',
   },
   sheet: {
     borderTopLeftRadius: 32,

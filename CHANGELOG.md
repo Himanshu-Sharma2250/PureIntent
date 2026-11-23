@@ -5,6 +5,16 @@ All notable changes to PureIntent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.1] - 2026-11-23
+
+### Fixed
+- **Android Keyboard Occlusion in Modals**: Resolved an issue on Android where the software keyboard covered active text inputs in the Create/Edit Task modal (`IntentModal`), the Add/Edit Comment modal (`CommentModal`), and the Log Time modal (`TimeLogModal`).
+  - **Root Cause**: Android Edge-to-Edge enforcement in modern Expo SDKs prevents the OS window manager from automatically resizing windows on keyboard open (`adjustResize` bypass). Because React Native's `<Modal>` runs in its own native `Dialog` window, it lacked `statusBarTranslucent`/`navigationBarTranslucent` measurements and explicit keyboard avoidance, causing the bottom sheet to remain pinned beneath the software keyboard.
+  - **Solution**: Wrapped the sheet contents across all modals in `KeyboardAvoidingView` configured with `behavior="padding"` on both platforms. Enabled `statusBarTranslucent` and `navigationBarTranslucent` on all `<Modal>` instances so dialog windows measure the full screen under edge-to-edge. Wrapped form contents in `ScrollView` with `keyboardShouldPersistTaps="handled"` and dynamic focus scrolling so focused inputs and primary submission buttons remain visible and reachable on the first tap.
+  - **Zero New Dependencies**: Accomplished completely offline with 0 new native packages, ensuring 100% offline functionality without requiring new native binary linking.
+
+---
+
 ## [4.1.0] - 2026-11-23
 
 ### Added

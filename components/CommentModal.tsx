@@ -9,6 +9,7 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useTheme } from './ThemeContext';
@@ -25,6 +26,8 @@ const { height } = Dimensions.get('window');
 
 /**
  * Editorial modal for creating and updating comments with a single content text field.
+ * Handles Android edge-to-edge keyboard displacement via KeyboardAvoidingView and
+ * translucent system bar window metrics.
  */
 export const CommentModal: React.FC<CommentModalProps> = ({
   visible,
@@ -40,6 +43,7 @@ export const CommentModal: React.FC<CommentModalProps> = ({
   // Animations
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (visible) {
@@ -102,9 +106,11 @@ export const CommentModal: React.FC<CommentModalProps> = ({
       visible={visible}
       animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <View style={styles.overlayContainer}>
-        {/* Backdrop overlay */}
+        {/* Fullscreen Backdrop overlay */}
         <Animated.View
           style={[
             styles.backdrop,
@@ -117,88 +123,101 @@ export const CommentModal: React.FC<CommentModalProps> = ({
           <Pressable style={styles.backdropPressable} onPress={onClose} />
         </Animated.View>
 
-        {/* Modal Sheet */}
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.background,
-              borderColor: colors.borderColor,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+        {/* Keyboard-avoiding container lifting the modal sheet above the keyboard */}
+        <KeyboardAvoidingView
+          behavior="padding"
+          style={styles.keyboardAvoidingView}
+          keyboardVerticalOffset={0}
         >
-          <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-            {/* Modal Title Row */}
-            <View style={styles.modalHeader}>
-              <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                {comment ? 'Revise Comment' : 'Add Comment'}
-              </Text>
+          {/* Modal Sheet */}
+          <Animated.View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: colors.background,
+                borderColor: colors.borderColor,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <ScrollView
+              ref={scrollViewRef}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {/* Modal Title Row */}
+              <View style={styles.modalHeader}>
+                <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+                  {comment ? 'Revise Comment' : 'Add Comment'}
+                </Text>
+                <Pressable
+                  onPress={onClose}
+                  style={({ pressed }) => [
+                    styles.closeButton,
+                    {
+                      backgroundColor: colors.mutedBg,
+                      transform: [{ scale: pressed ? 0.9 : 1 }],
+                    },
+                  ]}
+                >
+                  <X size={16} color={colors.foreground} />
+                </Pressable>
+              </View>
+
+              {/* Error Message */}
+              {errorText ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{errorText}</Text>
+                </View>
+              ) : null}
+
+              {/* Content Input field */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
+                  Comment Content
+                </Text>
+                <TextInput
+                  value={content}
+                  onChangeText={(val) => {
+                    setContent(val);
+                    if (errorText) setErrorText(null);
+                  }}
+                  placeholder="Elaborate details, steps, or thoughts..."
+                  placeholderTextColor="rgba(103, 120, 124, 0.4)"
+                  multiline
+                  numberOfLines={5}
+                  style={[
+                    styles.contentInput,
+                    {
+                      color: colors.foreground,
+                      borderColor: colors.borderColor,
+                      backgroundColor: colors.mutedBg,
+                    },
+                  ]}
+                  autoFocus
+                />
+              </View>
+
+              {/* Save Button */}
               <Pressable
-                onPress={onClose}
+                onPress={handleSave}
                 style={({ pressed }) => [
-                  styles.closeButton,
+                  styles.saveButton,
                   {
-                    backgroundColor: colors.mutedBg,
-                    transform: [{ scale: pressed ? 0.9 : 1 }],
+                    backgroundColor: colors.foreground,
+                    transform: [{ scale: pressed ? 0.97 : 1 }],
                   },
                 ]}
               >
-                <X size={16} color={colors.foreground} />
+                <Text style={[styles.saveButtonText, { color: colors.background }]}>
+                  {comment ? 'Confirm Revision' : 'Save Comment'}
+                </Text>
               </Pressable>
-            </View>
-
-            {/* Error Message */}
-            {errorText ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{errorText}</Text>
-              </View>
-            ) : null}
-
-            {/* Content Input field */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
-                Comment Content
-              </Text>
-              <TextInput
-                value={content}
-                onChangeText={(val) => {
-                  setContent(val);
-                  if (errorText) setErrorText(null);
-                }}
-                placeholder="Elaborate details, steps, or thoughts..."
-                placeholderTextColor="rgba(103, 120, 124, 0.4)"
-                multiline
-                numberOfLines={5}
-                style={[
-                  styles.contentInput,
-                  {
-                    color: colors.foreground,
-                    borderColor: colors.borderColor,
-                    backgroundColor: colors.mutedBg,
-                  },
-                ]}
-                autoFocus
-              />
-            </View>
-
-            {/* Save Button */}
-            <Pressable
-              onPress={handleSave}
-              style={({ pressed }) => [
-                styles.saveButton,
-                {
-                  backgroundColor: colors.foreground,
-                  transform: [{ scale: pressed ? 0.97 : 1 }],
-                },
-              ]}
-            >
-              <Text style={[styles.saveButtonText, { color: colors.background }]}>
-                {comment ? 'Confirm Revision' : 'Save Comment'}
-              </Text>
-            </Pressable>
-          </ScrollView>
-        </Animated.View>
+            </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -215,6 +234,11 @@ const styles = StyleSheet.create({
   backdropPressable: {
     flex: 1,
   },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    width: '100%',
+  },
   sheet: {
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -224,7 +248,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 24,
-    paddingBottom: 48,
+    paddingBottom: 40,
   },
   modalHeader: {
     flexDirection: 'row',

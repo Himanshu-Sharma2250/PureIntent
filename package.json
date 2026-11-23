@@ -1,6 +1,6 @@
 {
-  "name": "todo",
-  "version": "4.1.0",
+  "name": "PureIntent",
+  "version": "4.1.1",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/instrument-serif": "^0.4.1",

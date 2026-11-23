@@ -9,6 +9,7 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Calendar as CalendarIcon, Clock as ClockIcon, X, AlertCircle } from 'lucide-react-native';
 import { useTheme } from './ThemeContext';
@@ -75,6 +76,7 @@ export const IntentModal: React.FC<IntentModalProps> = ({
   // Animations
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Sync state when modal becomes visible or intent changes
   useEffect(() => {
@@ -287,7 +289,13 @@ export const IntentModal: React.FC<IntentModalProps> = ({
     };
 
     return (
-      <Modal transparent visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
+      <Modal
+        transparent
+        visible={showDatePicker}
+        onRequestClose={() => setShowDatePicker(false)}
+        statusBarTranslucent
+        navigationBarTranslucent
+      >
         <View style={styles.calendarOverlay}>
           <View style={[styles.calendarCard, { backgroundColor: colors.cardBg, borderColor: colors.borderColor }]}>
             <View style={styles.calendarHeader}>
@@ -384,6 +392,8 @@ export const IntentModal: React.FC<IntentModalProps> = ({
         transparent
         visible={showTimePicker}
         onRequestClose={() => setShowTimePicker(false)}
+        statusBarTranslucent
+        navigationBarTranslucent
       >
         <View style={styles.calendarOverlay}>
           <View style={[styles.timePickerCard, { backgroundColor: colors.cardBg, borderColor: colors.borderColor }]}>
@@ -526,9 +536,11 @@ export const IntentModal: React.FC<IntentModalProps> = ({
       visible={visible}
       animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <View style={styles.overlayContainer}>
-        {/* Backdrop overlay */}
+        {/* Fullscreen Backdrop overlay */}
         <Animated.View
           style={[
             styles.backdrop,
@@ -541,80 +553,99 @@ export const IntentModal: React.FC<IntentModalProps> = ({
           <Pressable style={styles.backdropPressable} onPress={onClose} />
         </Animated.View>
 
-        {/* Modal Sheet */}
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.background,
-              borderColor: colors.borderColor,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+        {/* Keyboard-avoiding container lifting the modal sheet above the keyboard */}
+        <KeyboardAvoidingView
+          behavior="padding"
+          style={styles.keyboardAvoidingView}
+          keyboardVerticalOffset={0}
         >
-          <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-            {/* Modal Title Row */}
-            <View style={styles.modalHeader}>
-              <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                {intent ? 'Revise Intent' : 'Formulate Intent'}
-              </Text>
-              <Pressable
-                onPress={onClose}
-                style={({ pressed }) => [
-                  styles.closeButton,
-                  {
-                    backgroundColor: colors.mutedBg,
-                    transform: [{ scale: pressed ? 0.9 : 1 }],
-                  },
-                ]}
-              >
-                <X size={16} color={colors.foreground} />
-              </Pressable>
-            </View>
-
-            {/* Error Message */}
-            {errorText ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{errorText}</Text>
+          {/* Modal Sheet */}
+          <Animated.View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: colors.background,
+                borderColor: colors.borderColor,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <ScrollView
+              ref={scrollViewRef}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {/* Modal Title Row */}
+              <View style={styles.modalHeader}>
+                <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+                  {intent ? 'Revise Intent' : 'Formulate Intent'}
+                </Text>
+                <Pressable
+                  onPress={onClose}
+                  style={({ pressed }) => [
+                    styles.closeButton,
+                    {
+                      backgroundColor: colors.mutedBg,
+                      transform: [{ scale: pressed ? 0.9 : 1 }],
+                    },
+                  ]}
+                >
+                  <X size={16} color={colors.foreground} />
+                </Pressable>
               </View>
-            ) : null}
 
-            {/* Title Input field */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
-                What is your intent?
-              </Text>
-              <TextInput
-                value={title}
-                onChangeText={(val) => {
-                  setTitle(val);
-                  if (errorText) setErrorText(null);
-                }}
-                placeholder="Declare intention..."
-                placeholderTextColor="rgba(103, 120, 124, 0.4)"
-                style={[
-                  styles.titleInput,
-                  {
-                    color: colors.foreground,
-                    borderBottomColor: colors.borderColor,
-                  },
-                ]}
-                autoFocus
-              />
-            </View>
+              {/* Error Message */}
+              {errorText ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{errorText}</Text>
+                </View>
+              ) : null}
 
-            {/* Description Input field */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
-                Subtext / Detail (optional)
-              </Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Elaborate details..."
-                placeholderTextColor="rgba(103, 120, 124, 0.4)"
-                multiline
-                numberOfLines={3}
+              {/* Title Input field */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
+                  What is your intent?
+                </Text>
+                <TextInput
+                  value={title}
+                  onChangeText={(val) => {
+                    setTitle(val);
+                    if (errorText) setErrorText(null);
+                  }}
+                  onFocus={() => {
+                    if (errorText) setErrorText(null);
+                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                  }}
+                  placeholder="Declare intention..."
+                  placeholderTextColor="rgba(103, 120, 124, 0.4)"
+                  style={[
+                    styles.titleInput,
+                    {
+                      color: colors.foreground,
+                      borderBottomColor: colors.borderColor,
+                    },
+                  ]}
+                  autoFocus
+                />
+              </View>
+
+              {/* Description Input field */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
+                  Subtext / Detail (optional)
+                </Text>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  onFocus={() => {
+                    scrollViewRef.current?.scrollTo({ y: 110, animated: true });
+                  }}
+                  placeholder="Elaborate details..."
+                  placeholderTextColor="rgba(103, 120, 124, 0.4)"
+                  multiline
+                  numberOfLines={3}
                 style={[
                   styles.descInput,
                   {
@@ -800,6 +831,7 @@ export const IntentModal: React.FC<IntentModalProps> = ({
             </Pressable>
           </ScrollView>
         </Animated.View>
+        </KeyboardAvoidingView>
       </View>
 
       {/* Custom calendar grid */}
@@ -821,6 +853,11 @@ const styles = StyleSheet.create({
   },
   backdropPressable: {
     flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    width: '100%',
   },
   sheet: {
     borderTopLeftRadius: 32,
