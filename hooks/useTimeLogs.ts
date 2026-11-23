@@ -1,15 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
-import { timeLogRepository, TimeLog } from '../db/timeLogRepository';
+import { timeLogRepository, TimeLog, TimeLogSource } from '../db/timeLogRepository';
+import { useTimer } from './useTimer';
 
 /**
  * Custom hook to interact with SQLite database for time logs tied to a task.
- * Manages load state, error reporting, input validation, and reactive updates for time logs and total duration.
+ * Manages load state, error reporting, input validation, and reactive updates
+ * for time logs and total duration in seconds.
+ * Subscribes to global timer stop events to automatically refresh the logs list and total.
  */
 export function useTimeLogs(taskId: number) {
   const db = useSQLiteContext();
+  const { lastStopped } = useTimer();
+
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
-  const [totalMinutes, setTotalMinutes] = useState<number>(0);
+  const [totalSeconds, setTotalSeconds] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +29,7 @@ export function useTimeLogs(taskId: number) {
         timeLogRepository.getTotalTimeSpent(db, taskId),
       ]);
       setTimeLogs(logsData);
-      setTotalMinutes(total);
+      setTotalSeconds(total);
     } catch (err: any) {
       console.error(`[useTimeLogs] Error fetching time logs for task ${taskId}:`, err);
       setError(err?.message || 'Failed to fetch time logs.');
@@ -35,18 +40,31 @@ export function useTimeLogs(taskId: number) {
 
   // Create: Add new time log entry
   const addTimeLog = useCallback(
-    async (timeSpentMinutes: number, description: string, workDate: string) => {
-      const trimmed = description.trim();
-      if (!trimmed) {
+    async (
+      timeSpentSeconds: number,
+      description: string | null,
+      workDate: string,
+      source: TimeLogSource = 'manual'
+    ) => {
+      const trimmed = (description || '').trim();
+      // Manual entries require a description; timer entries can be empty
+      if (source === 'manual' && !trimmed) {
         throw new Error('Description cannot be empty.');
       }
-      if (timeSpentMinutes <= 0 || isNaN(timeSpentMinutes)) {
+      if (timeSpentSeconds <= 0 || isNaN(timeSpentSeconds)) {
         throw new Error('Time spent must be greater than 0.');
       }
 
       try {
         setError(null);
-        await timeLogRepository.createTimeLog(db, taskId, timeSpentMinutes, trimmed, workDate);
+        await timeLogRepository.createTimeLog(
+          db,
+          taskId,
+          timeSpentSeconds,
+          trimmed || null,
+          workDate,
+          source
+        );
         await fetchTimeLogs();
       } catch (err: any) {
         console.error(`[useTimeLogs] Error adding time log for task ${taskId}:`, err);
@@ -59,18 +77,31 @@ export function useTimeLogs(taskId: number) {
 
   // Update: Modify existing time log entry
   const updateTimeLog = useCallback(
-    async (logId: number, timeSpentMinutes: number, description: string, workDate: string) => {
-      const trimmed = description.trim();
-      if (!trimmed) {
+    async (
+      logId: number,
+      timeSpentSeconds: number,
+      description: string | null,
+      workDate: string,
+      source: TimeLogSource = 'manual'
+    ) => {
+      const trimmed = (description || '').trim();
+      // Manual entries require a description; timer entries can have an empty description
+      if (source === 'manual' && !trimmed) {
         throw new Error('Description cannot be empty.');
       }
-      if (timeSpentMinutes <= 0 || isNaN(timeSpentMinutes)) {
+      if (timeSpentSeconds <= 0 || isNaN(timeSpentSeconds)) {
         throw new Error('Time spent must be greater than 0.');
       }
 
       try {
         setError(null);
-        await timeLogRepository.updateTimeLog(db, logId, timeSpentMinutes, trimmed, workDate);
+        await timeLogRepository.updateTimeLog(
+          db,
+          logId,
+          timeSpentSeconds,
+          trimmed || null,
+          workDate
+        );
         await fetchTimeLogs();
       } catch (err: any) {
         console.error(`[useTimeLogs] Error updating time log ${logId}:`, err);
@@ -85,13 +116,13 @@ export function useTimeLogs(taskId: number) {
   const deleteTimeLog = useCallback(
     async (logId: number) => {
       const previousLogs = [...timeLogs];
-      const previousTotal = totalMinutes;
+      const previousTotal = totalSeconds;
 
       const target = timeLogs.find((item) => item.id === logId);
-      const targetMinutes = target ? target.time_spent_minutes : 0;
+      const targetSeconds = target ? target.time_spent_seconds : 0;
 
       setTimeLogs((prev) => prev.filter((item) => item.id !== logId));
-      setTotalMinutes((prev) => Math.max(0, prev - targetMinutes));
+      setTotalSeconds((prev) => Math.max(0, prev - targetSeconds));
 
       try {
         setError(null);
@@ -101,16 +132,16 @@ export function useTimeLogs(taskId: number) {
           timeLogRepository.getTotalTimeSpent(db, taskId),
         ]);
         setTimeLogs(logsData);
-        setTotalMinutes(total);
+        setTotalSeconds(total);
       } catch (err: any) {
         console.error(`[useTimeLogs] Error deleting time log ${logId}:`, err);
         setTimeLogs(previousLogs);
-        setTotalMinutes(previousTotal);
+        setTotalSeconds(previousTotal);
         setError(err?.message || 'Failed to delete time log.');
         throw err;
       }
     },
-    [db, taskId, timeLogs, totalMinutes]
+    [db, taskId, timeLogs, totalSeconds]
   );
 
   // Load time logs on mount / when taskId changes
@@ -118,9 +149,17 @@ export function useTimeLogs(taskId: number) {
     fetchTimeLogs();
   }, [fetchTimeLogs]);
 
+  // Reactive automatic refresh when a timer stops for this task
+  useEffect(() => {
+    if (lastStopped && lastStopped.taskId === taskId) {
+      fetchTimeLogs();
+    }
+  }, [lastStopped, taskId, fetchTimeLogs]);
+
   return {
     timeLogs,
-    totalMinutes,
+    totalSeconds,
+    totalMinutes: Math.floor(totalSeconds / 60),
     loading,
     error,
     refreshTimeLogs: fetchTimeLogs,

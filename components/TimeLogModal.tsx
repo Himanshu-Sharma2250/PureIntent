@@ -16,9 +16,14 @@ import { TimeLog } from '../db/timeLogRepository';
 
 interface TimeLogModalProps {
   visible: boolean;
-  timeLog: TimeLog | null; // Null if adding, otherwise editing
+  timeLog: TimeLog | null; // Null if adding manual log, otherwise editing
   onClose: () => void;
-  onSave: (timeSpentMinutes: number, description: string, workDate: string) => Promise<void>;
+  onSave: (
+    timeSpentSeconds: number,
+    description: string | null,
+    workDate: string,
+    source?: 'manual' | 'timer'
+  ) => Promise<void>;
 }
 
 const { height } = Dimensions.get('window');
@@ -41,9 +46,10 @@ const getYesterdayDateString = (): string => {
 };
 
 /**
- * Editorial modal for logging work sessions and updating existing time logs.
+ * Editorial modal for logging work sessions and revising existing time logs.
  * Supports hours & minutes inputs, date selection with backdating validation,
- * multiline description input, and quick-add chips.
+ * multiline description input (required for manual logs, optional for timer logs),
+ * and quick-duration chips.
  */
 export const TimeLogModal: React.FC<TimeLogModalProps> = ({
   visible,
@@ -60,7 +66,7 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
   const [showCalendar, setShowCalendar] = useState<boolean>(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  // Calendar month/year navigation state
+  // Calendar navigation
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
 
@@ -71,11 +77,21 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
   useEffect(() => {
     if (visible) {
       if (timeLog) {
-        const h = Math.floor(timeLog.time_spent_minutes / 60);
-        const m = timeLog.time_spent_minutes % 60;
-        setHours(String(h));
-        setMinutes(String(m));
-        setDescription(timeLog.description);
+        const totalSecs = timeLog.time_spent_seconds;
+        const h = Math.floor(totalSecs / 3600);
+        const m = Math.floor((totalSecs % 3600) / 60);
+        const s = totalSecs % 60;
+
+        // If under a minute, default display to 1 minute or 0:m
+        if (h === 0 && m === 0 && s > 0) {
+          setHours('0');
+          setMinutes('1');
+        } else {
+          setHours(String(h));
+          setMinutes(String(m));
+        }
+
+        setDescription(timeLog.description || '');
         setWorkDate(timeLog.work_date);
       } else {
         setHours('0');
@@ -86,12 +102,10 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
       setErrorText(null);
       setShowCalendar(false);
 
-      // Reset calendar navigation to current date's month/year
       const now = new Date();
       setCalendarMonth(now.getMonth());
       setCalendarYear(now.getFullYear());
 
-      // Animate in
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0.5,
@@ -106,7 +120,6 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
         }),
       ]).start();
     } else {
-      // Animate out
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
@@ -122,38 +135,29 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
     }
   }, [visible, timeLog, slideAnim, fadeAnim]);
 
-  const handleQuickAdd = (addHours: number, addMinutes: number) => {
-    const currentH = parseInt(hours, 10) || 0;
-    const currentM = parseInt(minutes, 10) || 0;
-    const totalCurrentMinutes = currentH * 60 + currentM;
-    const addedMinutes = addHours * 60 + addMinutes;
-    const newTotal = totalCurrentMinutes + addedMinutes;
-
-    setHours(String(Math.floor(newTotal / 60)));
-    setMinutes(String(newTotal % 60));
-    if (errorText) setErrorText(null);
-  };
-
   const handleSetExactDuration = (totalMins: number) => {
     setHours(String(Math.floor(totalMins / 60)));
     setMinutes(String(totalMins % 60));
     if (errorText) setErrorText(null);
   };
 
+  const isTimerEntry = timeLog?.source === 'timer';
+
   const handleSave = async () => {
     const parsedH = parseInt(hours, 10) || 0;
     const parsedM = parseInt(minutes, 10) || 0;
-    const totalMinutes = parsedH * 60 + parsedM;
+    const totalSeconds = (parsedH * 60 + parsedM) * 60;
     const trimmedDesc = description.trim();
     const todayStr = getTodayDateString();
 
-    if (totalMinutes <= 0) {
+    if (totalSeconds <= 0) {
       setErrorText('Time spent must be greater than 0 minutes.');
       return;
     }
 
-    if (!trimmedDesc) {
-      setErrorText('Description is required.');
+    // Manual logs require a description; timer logs permit an empty description
+    if (!isTimerEntry && !trimmedDesc) {
+      setErrorText('Description is required for manual time logs.');
       return;
     }
 
@@ -163,7 +167,12 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
     }
 
     try {
-      await onSave(totalMinutes, trimmedDesc, workDate);
+      await onSave(
+        totalSeconds,
+        trimmedDesc || null,
+        workDate,
+        timeLog ? timeLog.source : 'manual'
+      );
       onClose();
     } catch (err: any) {
       setErrorText(err?.message || 'Failed to save time log.');
@@ -192,7 +201,7 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
   // Calendar Helpers
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
   const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
@@ -552,12 +561,10 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
 
                       const items: React.ReactNode[] = [];
 
-                      // Blank leading days
                       for (let i = 0; i < firstDay; i++) {
                         items.push(<View key={`blank-${i}`} style={styles.calDayCell} />);
                       }
 
-                      // Month days
                       for (let day = 1; day <= daysInMonth; day++) {
                         const cellDateStr = `${calendarYear}-${pad(calendarMonth + 1)}-${pad(day)}`;
                         const isFuture = cellDateStr > todayStr;
@@ -606,7 +613,9 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
             {/* Description Input Section */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.mutedFg }]}>
-                Work Description (Required)
+                {isTimerEntry
+                  ? 'Work Description (Optional for timer logs)'
+                  : 'Work Description (Required)'}
               </Text>
               <TextInput
                 value={description}
@@ -614,7 +623,11 @@ export const TimeLogModal: React.FC<TimeLogModalProps> = ({
                   setDescription(val);
                   if (errorText) setErrorText(null);
                 }}
-                placeholder="What did you accomplish during this session?"
+                placeholder={
+                  isTimerEntry
+                    ? 'What did you accomplish during this session? (Optional)'
+                    : 'What did you accomplish during this session?'
+                }
                 placeholderTextColor="rgba(103, 120, 124, 0.4)"
                 multiline
                 numberOfLines={4}
@@ -795,10 +808,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-  calendarTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
   calNavBtn: {
     width: 28,
     height: 28,
@@ -806,12 +815,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  calendarTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   calDaysHeaderRow: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
     marginBottom: 8,
   },
   calDayHeader: {
-    flex: 1,
+    width: 32,
     textAlign: 'center',
     fontSize: 11,
     fontWeight: '600',
@@ -819,10 +833,11 @@ const styles = StyleSheet.create({
   calGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'flex-start',
   },
   calDayCell: {
     width: `${100 / 7}%`,
-    height: 34,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -830,24 +845,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   descriptionInput: {
-    fontSize: 15,
     borderRadius: 16,
     borderWidth: 1,
-    padding: 16,
-    minHeight: 100,
+    padding: 14,
+    fontSize: 15,
     textAlignVertical: 'top',
-    lineHeight: 22,
+    minHeight: 100,
   },
   saveButton: {
-    borderRadius: 99,
+    borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 10,
   },
   saveButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
 });

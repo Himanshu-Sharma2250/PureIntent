@@ -17,6 +17,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Sun, Moon, Plus, Search, RefreshCw, Bell, BellOff } from 'lucide-react-native';
 import { useTheme } from '../components/ThemeContext';
 import { useIntents } from '../hooks/useIntents';
+import { useTimer } from '../hooks/useTimer';
 import { TaskCard } from '../components/TaskCard';
 import { ActionModal } from '../components/ActionModal';
 import { IntentModal } from '../components/IntentModal';
@@ -40,6 +41,7 @@ export const HomeScreen: React.FC = () => {
     requestPermissions,
   } = useIntents();
 
+  const { activeTimer, stop: stopTimer, discard: discardTimer } = useTimer();
   const navigation = useNavigation<any>();
 
   // Refresh intents list whenever HomeScreen comes into focus
@@ -66,7 +68,6 @@ export const HomeScreen: React.FC = () => {
   const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
 
   useEffect(() => {
-    // Spin animation for loading spinner
     if (loading) {
       Animated.loop(
         Animated.timing(spinValue, {
@@ -81,7 +82,6 @@ export const HomeScreen: React.FC = () => {
     }
   }, [loading, spinValue]);
 
-  // Trigger theme animation on change
   useEffect(() => {
     Animated.timing(themeAnim, {
       toValue: isDark ? 1 : 0,
@@ -116,12 +116,10 @@ export const HomeScreen: React.FC = () => {
 
   // Filter & Search Logic
   const filteredIntents = intents.filter((item) => {
-    // Match search
     const matchesSearch =
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    // Match filter
     if (activeFilter === 'pending') {
       return matchesSearch && !item.is_completed;
     }
@@ -131,9 +129,44 @@ export const HomeScreen: React.FC = () => {
     return matchesSearch;
   });
 
-  // Action Menu Triggers
-  const handleToggleComplete = (intent: Intent) => {
+  // Toggle completion with active timer check
+  const handleToggleComplete = async (intent: Intent) => {
+    // Edge case: Task marked complete while its timer is running
+    if (!intent.is_completed && activeTimer && activeTimer.task_id === intent.id) {
+      Alert.alert(
+        'Active Timer Running',
+        'Stop timer and log time?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Stop & Log',
+            onPress: async () => {
+              try {
+                await stopTimer(true);
+                toggleComplete(intent.id, true);
+              } catch (err) {
+                console.error('[HomeScreen] Error stopping timer on complete:', err);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     toggleComplete(intent.id, !intent.is_completed);
+  };
+
+  const handleDeleteIntent = async (intentId: number) => {
+    // Edge case: Task deleted while its timer is running
+    if (activeTimer && activeTimer.task_id === intentId) {
+      try {
+        await discardTimer();
+      } catch (err) {
+        console.error('[HomeScreen] Error discarding timer on delete:', err);
+      }
+    }
+    deleteIntent(intentId);
   };
 
   const handleLongPressCard = (intent: Intent) => {
@@ -217,7 +250,6 @@ export const HomeScreen: React.FC = () => {
                 },
               ]}
             >
-              {/* Sun Icon (Slide out top & fade) */}
               <Animated.View
                 style={[
                   StyleSheet.absoluteFill,
@@ -231,7 +263,6 @@ export const HomeScreen: React.FC = () => {
                 <Sun size={18} color={colors.foreground} strokeWidth={2.5} />
               </Animated.View>
 
-              {/* Moon Icon (Slide in from bottom & fade) */}
               <Animated.View
                 style={[
                   StyleSheet.absoluteFill,
@@ -301,7 +332,7 @@ export const HomeScreen: React.FC = () => {
               style={[
                 styles.spinner,
                 {
-                  borderColor: 'rgba(165, 0, 54, 0.2)', // primary alpha/20
+                  borderColor: 'rgba(165, 0, 54, 0.2)',
                   borderTopColor: colors.primary,
                   transform: [
                     {
@@ -392,7 +423,7 @@ export const HomeScreen: React.FC = () => {
           }}
           onToggleComplete={() => selectedIntent && handleToggleComplete(selectedIntent)}
           onEdit={() => selectedIntent && handleEditIntentTrigger(selectedIntent)}
-          onDelete={() => selectedIntent && deleteIntent(selectedIntent.id)}
+          onDelete={() => selectedIntent && handleDeleteIntent(selectedIntent.id)}
         />
 
         {/* Add/Edit Form Slide modal */}
@@ -490,7 +521,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   listContent: {
-    paddingBottom: 100, // allocate padding for FAB
+    paddingBottom: 100,
   },
   centerContainer: {
     flex: 1,

@@ -48,18 +48,77 @@ export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE
       );
+    `);
 
-      CREATE TABLE IF NOT EXISTS time_logs (
+    // Ensure active_timer table exists (holds at most one active running timer)
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS active_timer (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         task_id INTEGER NOT NULL,
-        time_spent_minutes INTEGER NOT NULL,
-        description TEXT NOT NULL,
-        work_date TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        started_at TEXT NOT NULL,
         FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE
       );
     `);
+
+    // Migration check: time_logs table schema (v4.0 minutes -> v4.1 seconds, nullable description, source column)
+    const timeLogsTables = await db.getAllAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name = 'time_logs';"
+    );
+    const hasTimeLogsTable = timeLogsTables.length > 0;
+
+    if (!hasTimeLogsTable) {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS time_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_id INTEGER NOT NULL,
+          time_spent_seconds INTEGER NOT NULL,
+          description TEXT,
+          work_date TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'manual',
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE
+        );
+      `);
+    } else {
+      const timeLogCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(time_logs);');
+      const hasMinutesCol = timeLogCols.some((col) => col.name === 'time_spent_minutes');
+      const hasSourceCol = timeLogCols.some((col) => col.name === 'source');
+
+      if (hasMinutesCol) {
+        // Safe migration: table recreation preserving existing data with time_spent_minutes * 60 -> time_spent_seconds,
+        // nullable description, and source default 'manual'
+        await db.execAsync(`
+          PRAGMA foreign_keys = OFF;
+
+          CREATE TABLE time_logs_v41 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            time_spent_seconds INTEGER NOT NULL,
+            description TEXT,
+            work_date TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'manual',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (task_id) REFERENCES intents(id) ON DELETE CASCADE
+          );
+
+          INSERT INTO time_logs_v41 (id, task_id, time_spent_seconds, description, work_date, source, created_at, updated_at)
+          SELECT id, task_id, (time_spent_minutes * 60), description, work_date, 'manual', created_at, updated_at
+          FROM time_logs;
+
+          DROP TABLE time_logs;
+
+          ALTER TABLE time_logs_v41 RENAME TO time_logs;
+
+          PRAGMA foreign_keys = ON;
+        `);
+        console.log('[Database] Migration: Migrated time_logs to v4.1.0 schema (time_spent_seconds, nullable description, source).');
+      } else if (!hasSourceCol) {
+        await db.execAsync("ALTER TABLE time_logs ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';");
+        console.log('[Database] Migration: Added source column to time_logs table.');
+      }
+    }
 
     // Migration check: Add notification_id column if it doesn't exist on older schema databases
     const tableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(intents);');

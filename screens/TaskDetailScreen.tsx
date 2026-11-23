@@ -31,8 +31,10 @@ import { useComments } from '../hooks/useComments';
 import { CommentCard } from '../components/CommentCard';
 import { CommentModal } from '../components/CommentModal';
 import { useTimeLogs } from '../hooks/useTimeLogs';
-import { TimeLogCard, formatMinutesToDuration } from '../components/TimeLogCard';
+import { useTimer } from '../hooks/useTimer';
+import { TimeLogCard, formatSecondsToDuration } from '../components/TimeLogCard';
 import { TimeLogModal } from '../components/TimeLogModal';
+import { TimerButton } from '../components/TimerButton';
 import { IntentModal } from '../components/IntentModal';
 import { Comment } from '../db/commentRepository';
 import { TimeLog } from '../db/timeLogRepository';
@@ -58,6 +60,9 @@ export const TaskDetailScreen: React.FC = () => {
   const [isTimeLogModalVisible, setIsTimeLogModalVisible] = useState<boolean>(false);
   const [selectedTimeLog, setSelectedTimeLog] = useState<TimeLog | null>(null);
 
+  // Global Timer Hook
+  const { activeTimer, stop: stopTimer, discard: discardTimer } = useTimer();
+
   // Comments Hook
   const {
     comments,
@@ -70,7 +75,7 @@ export const TaskDetailScreen: React.FC = () => {
   // Time Logs Hook
   const {
     timeLogs,
-    totalMinutes,
+    totalSeconds,
     loading: timeLogsLoading,
     addTimeLog,
     updateTimeLog,
@@ -84,7 +89,6 @@ export const TaskDetailScreen: React.FC = () => {
       setTaskLoading(true);
       const loadedTask = await taskRepository.getIntentById(db, taskId);
       if (!loadedTask) {
-        // Task no longer exists
         navigation.goBack();
         return;
       }
@@ -100,10 +104,8 @@ export const TaskDetailScreen: React.FC = () => {
     loadTask();
   }, [loadTask]);
 
-  // Toggle task completion
-  const handleToggleComplete = async () => {
+  const proceedToggleComplete = async (nextCompleted: boolean) => {
     if (!task) return;
-    const nextCompleted = !task.is_completed;
     try {
       await taskRepository.toggleComplete(db, task.id, nextCompleted);
 
@@ -123,6 +125,37 @@ export const TaskDetailScreen: React.FC = () => {
     } catch (err) {
       console.error('[TaskDetailScreen] Error toggling task completion:', err);
     }
+  };
+
+  // Toggle task completion with active running timer check
+  const handleToggleComplete = async () => {
+    if (!task) return;
+    const nextCompleted = !task.is_completed;
+
+    // Edge case: Task marked complete while its timer is running
+    if (nextCompleted && activeTimer && activeTimer.task_id === task.id) {
+      Alert.alert(
+        'Active Timer Running',
+        'Stop timer and log time?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Stop & Log',
+            onPress: async () => {
+              try {
+                await stopTimer(true);
+                await proceedToggleComplete(true);
+              } catch (err) {
+                console.error('[TaskDetailScreen] Error stopping timer on complete:', err);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    await proceedToggleComplete(nextCompleted);
   };
 
   // Save task edit from IntentModal
@@ -148,7 +181,7 @@ export const TaskDetailScreen: React.FC = () => {
     }
   };
 
-  // Delete task with confirmation (cascades to comments and time_logs in SQLite)
+  // Delete task with confirmation (cascades to comments, time_logs, and active_timer)
   const handleDeleteTask = () => {
     if (!task) return;
     Alert.alert(
@@ -161,6 +194,10 @@ export const TaskDetailScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Edge case: task deleted while its timer is running
+              if (activeTimer && activeTimer.task_id === task.id) {
+                await discardTimer();
+              }
               if (task.notification_id) {
                 await notificationService.cancelTaskNotification(task.notification_id);
               }
@@ -220,11 +257,22 @@ export const TaskDetailScreen: React.FC = () => {
     setIsTimeLogModalVisible(true);
   };
 
-  const handleSaveTimeLog = async (timeSpentMinutes: number, description: string, workDate: string) => {
+  const handleSaveTimeLog = async (
+    timeSpentSeconds: number,
+    description: string | null,
+    workDate: string,
+    source?: 'manual' | 'timer'
+  ) => {
     if (selectedTimeLog) {
-      await updateTimeLog(selectedTimeLog.id, timeSpentMinutes, description, workDate);
+      await updateTimeLog(
+        selectedTimeLog.id,
+        timeSpentSeconds,
+        description,
+        workDate,
+        source || selectedTimeLog.source
+      );
     } else {
-      await addTimeLog(timeSpentMinutes, description, workDate);
+      await addTimeLog(timeSpentSeconds, description, workDate, source || 'manual');
     }
   };
 
@@ -378,17 +426,17 @@ export const TaskDetailScreen: React.FC = () => {
           <View style={[styles.metaSection, { borderTopColor: colors.borderColor }]}>
             {/* Total Time Logged Badge */}
             <View style={styles.metaBadge}>
-              <Timer size={13} color={totalMinutes > 0 ? colors.primary : colors.mutedFg} />
+              <Timer size={13} color={totalSeconds > 0 ? colors.primary : colors.mutedFg} />
               <Text
                 style={[
                   styles.metaText,
                   {
-                    color: totalMinutes > 0 ? colors.foreground : colors.mutedFg,
-                    fontWeight: totalMinutes > 0 ? '600' : 'normal',
+                    color: totalSeconds > 0 ? colors.foreground : colors.mutedFg,
+                    fontWeight: totalSeconds > 0 ? '600' : 'normal',
                   },
                 ]}
               >
-                {formatMinutesToDuration(totalMinutes)} logged
+                {formatSecondsToDuration(totalSeconds)} logged
               </Text>
             </View>
 
@@ -470,15 +518,16 @@ export const TaskDetailScreen: React.FC = () => {
             {timeLogs.length > 0 ? (
               <View style={[styles.countBadge, { backgroundColor: colors.mutedBg }]}>
                 <Text style={[styles.countText, { color: colors.mutedFg }]}>
-                  {timeLogs.length} • {formatMinutesToDuration(totalMinutes)}
+                  {timeLogs.length} • {formatSecondsToDuration(totalSeconds)}
                 </Text>
               </View>
             ) : null}
           </View>
 
+          {/* Manual Log Time Trigger Button */}
           <Pressable
             onPress={handleOpenAddTimeLog}
-            accessibilityLabel="Log time"
+            accessibilityLabel="Log time manually"
             style={({ pressed }) => [
               styles.sectionAddBtn,
               {
@@ -494,6 +543,9 @@ export const TaskDetailScreen: React.FC = () => {
           </Pressable>
         </View>
 
+        {/* Start/Stop Timer Button or Active Session Display */}
+        <TimerButton taskId={task.id} taskTitle={task.title} isCompleted={task.is_completed} />
+
         {/* Time Logs List */}
         {timeLogs.length === 0 ? (
           <View style={[styles.emptyBox, { borderColor: colors.borderColor }]}>
@@ -501,7 +553,7 @@ export const TaskDetailScreen: React.FC = () => {
               Unrecorded.
             </Text>
             <Text style={[styles.emptySubtitle, { color: colors.mutedFg }]}>
-              No time logged yet — track your first work session.
+              No time logged yet — start the timer or track your first work session.
             </Text>
           </View>
         ) : (

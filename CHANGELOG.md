@@ -5,6 +5,31 @@ All notable changes to PureIntent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-11-23
+
+### Added
+- **Per-Task Start/Stop Timer (100% Offline)**: Native offline timer feature allowing focused work session tracking directly tied to tasks, persisting start timestamp in local SQLite.
+- **Dedicated Timer Repository (`db/timerRepository.ts`)**: Encapsulates `startTimer`, `getActiveTimer`, `stopTimer`, and `discardTimer` operations with concurrency lock protection and strict single-active-timer enforcement.
+- **Global Timer Hook & App-Wide Provider (`hooks/useTimer.ts`)**: Root context provider tracking active timer state and computing live elapsed time strictly as `now - started_at` (clamped to 0 to safeguard against device clock shifts).
+- **Global Running-Timer Bar (`components/ActiveTimerBar.tsx`)**: Slim persistent bottom bar visible across all screens (including HomeScreen task list) displaying running task title, live elapsed time (HH:MM:SS), and tap-to-focus navigation.
+- **Task Detail Timer Controls (`components/TimerButton.tsx`)**: In-context timer controls displaying Start Timer or live session duration badge with Stop and secondary Discard actions.
+- **Edge Case Protection**:
+  - Switch confirmation ("Stop timer on '<task title>' and start here?") when starting a timer while another is active.
+  - Cascade deletion on task delete: active timer is discarded without orphaned rows or crashes.
+  - Task completion prompt ("Stop timer and log time?") when marking a task complete with an active running timer.
+  - Long-running timer safety prompt (>12 hours) on app foregrounding to save as-is or discard.
+  - Short session confirmation (<60 seconds) on timer stop offering keep or discard choices.
+  - Midnight boundary handling preserving the initial session start date as `work_date`.
+
+### Changed
+- **Safe Schema Migration (`db/db.ts`)**: Automated database migration upgrading `time_logs` table: converted `time_spent_minutes` to `time_spent_seconds` (multiplying existing values by 60), made `description` nullable, and added `source` column ('manual' | 'timer', defaulting existing entries to 'manual'). Added `active_timer` table with cascade delete foreign key.
+- **Refactored Time Log Repository (`db/timeLogRepository.ts`)**: Updated duration signatures and calculations to operate in seconds (`time_spent_seconds`) and support nullable descriptions.
+- **Reactive Time Logs Hook (`hooks/useTimeLogs.ts`)**: Integrated with `useTimer` to automatically refresh time log entries and total time logged whenever a timer stops.
+- **Updated Editorial Components (`components/TimeLogCard.tsx`, `components/TimeLogModal.tsx`)**: Formatted duration badges to display hours & minutes ("1h 05m", "1h 0m") or seconds for sessions under a minute; added subtle "Add what you did" prompt for timer logs lacking descriptions and subtle timer source badges; updated modal validation to keep description optional for timer logs while requiring it for manual logs.
+- **Updated Screens (`screens/TaskDetailScreen.tsx`, `screens/HomeScreen.tsx`)**: Wired timer controls, total seconds aggregation, and completion/deletion prompts.
+
+---
+
 ## [4.0.0] - 2026-09-12
 
 ### Added
